@@ -1,80 +1,10 @@
 '''This file contains functions to calculate sputtering yields of chemical, physical, and total sputtering. It is applicable to physical sputtering processes with targets made from
-graphite (C), Be, Fe, Mo, or W under bombardement with hydrogen (H), deuterium (D), tritium (T) or helium (He)'''
+graphite (C), Be, Fe, Mo, or W under bombardement with hydrogen (H), deuterium (D), tritium (T) or helium (He). The description of the used variables can be found in variablesDescription.txt'''
 
 import numpy as np
 import scipy.constants
 import scipy.integrate as integrate
 #import pandas as pd
-
-#######################################################################################################################################################################
-#Variable               Description                                                                         Unit
-
-#only for phsical sputtering 
-#Y_phys                 Physical sputtering Yield                                                           -
-#Y0_phys                Physical sputtering Yield for alpha = 0                                              -
-#N_emmited              Number of emitted target atoms                                                      -
-#N_incident             Number of incident particles                                                        -
-#E_dep                  Energy deposited by impact in outermost surface layers                              J
-#d                      Thickness of outermost surface layers                                               angstroem
-#Q_y_phys[i]            Fitting parameter for [Hydrogen, Deuterium, Tritium , Helium, Self-Sputtering]      -
-#f_y                    Fitting parameter                                                                   J^{0.5}
-#E_th_phys[i]           Threshold energy for [Hydrogen, Deuterium, Tritium , Helium, Self-Sputtering]       J
-#alpha                  Incident angle towards surface normale of target                                    arc
-#a_max                  Value of alpha where Y_phys has maxiumum                                            arc
-#M1                     Atomic mass of incident particle                                                    u
-#M2                     Atomic mass of target atom (carbon)                                                 u
-#Z1                     Atomic number of incident particle atom                                             -
-#Z2                     Atomic number of target atom (carbon)                                               -
-#gamma                  Kinematic factor                                                                    -
-#a_L                    Lindhard screening length                                                           m
-
-#only for chemical erosion 
-#Y_chem_total           Total sputtering yield chemical erosion [Hydrogen, Deuterium, Tritium]              -
-#Y_chem                 Sputtering yield chem. erosion by single subprocess                                 -
-#Y_surf                 Sputtering yield chem. erosion by fast particles for single subprocess              -
-#Y_therm                Sputtering yield chem. erosion (ion-induced) for single subprocess                  -
-#Y_damage               Sputtering yield of bond-breaking ion impacts for single subprocess                 -                                                         
-#C_d_chem[i]            Parameter for [Hydrogen, Deuterium, Tritium]                                        -
-#Q_y_chem[i]            Parameter for [Hydrogen, Deuterium, Tritium]                                        -
-#E_th_chem[i]           Parameter for [Hydrogen, Deuterium, Tritium]                                        J
-#E_thd_chem[i]          Threshold energy for Y_damage for [Hydrogen, Deuterium, Tritium]                    J
-#E_ths_chem[i]          Threshold energy for Y_surf for [Hydrogen, Deuterium, Tritium]                      J
-#s_chem                 Fitting parameter for single subprocess                                             -
-#c_chem[i]              Fitting parameter for subprocesses                                                  -
-
-#only for erosion fluxes/layer thickness
-#T_e                    Electron temperature                                                                J
-#T_i                    Ion temperature                                                                     J
-#c_w                    Ion velocity                                                                        m/s
-#t_discharge            Duration of discharge(s)                                                            s
-#P_redeposition         Probability of redeposition                                              
-#flux_electron          Flux density of electrons (impinging on wall?)                                      1/m^2s
-#stickingCoefficient    Sticking propability when eroded particle gets back to target surface
-#f                      Concentration of plasma ions                                                        1/m^3
-#m_i                    Ion mass                                                                            kg
-
-#only for divertor specific net erosion
-#theta                  Inclination angle of target with respect to magnetic flux surface (1 - alpha?)      rad
-#lambda_n               Decay length of n_e, T_e from separatrix across the field lines                     m
-#y                      Distance along the divertor plate                                                   m
-#z                      Height above the divertor plate                                                     m
-#n_e_0                  Electron density at the separatrix                                                  1/m^3
-#T_e_0                  Electron temperature at the separatrix                                              K
-#dy                     Transport length along divertor plate of eroded particles before redeposition       m
-
-#general use
-#E                      Energy of incident particle                                                         J
-#E_TF[i]                Fitting parameter for [Hydrogen, Deuterium, Tritium , Helium, Self-Sputtering]      J
-#E_s                    Binding energy/sublimation energy of target material                                J
-#epsilon                Reduced energy (E/E_TF)                                                             -
-#T_s                    Surface temperature of the target                                                   K
-#n                      Density of target atoms                                                             1/m^3
-#n_o                    Density of target atoms                                                             1/m^3
-#flux                   Ion flux density of incident particles                                              1/m^2s
-#S_n                    Stopping cross section                                                              Jm^2
-#s_n                    Nuclear stopping cross section                                                      -
-#e                      Elementary charge (1.602176462 * 1e-19)                                             C
-#k, k_B                 Boltzmann constant (k_B/e = 8.617 * 1e-5, k_B)                                      eV/K, J/K
 
 #######################################################################################################################################################################
 #initialize common parameter values
