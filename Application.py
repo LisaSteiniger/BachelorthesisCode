@@ -1,25 +1,28 @@
 '''This file is responsible for the final calculation of sputtering yields and thickness of the erosion layer. 
 It uses the functions defined in SputteringYieldFunctions after reading the data from the archieveDB'''
 
+import os
 import w7xarchive
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.constants
 import scipy.integrate as integrate
 
 import src.SputteringYieldFunctions as calc
-#import src.ReadArchieveDB as read
+from src.ReadArchieveDB import readMarkusData
 
 #######################################################################################################################################################################
 #initialize common parameter values
 e  =  scipy.constants.elementary_charge 
+u = scipy.constants.u   #to convert M in [u] to m in [kg]: M * u = m
 k_B = scipy.constants.Boltzmann
 k = k_B/e 
 
 #ion masses in [kg] and ion concentrations (no unit) for [H, D, T, C, O]
 ions = ['H', 'D', 'T', 'C', 'O']
-m_i = [1, 1, 1, 1, 1] #nonsense values, look them up
-f_i = [0.89, 0, 0, 0.4, 0.1]
+m_i = np.array([1.00794, 2.01210175, 3.0160495, 12.011, 15.9994]) * u 
+f_i = [0.89, 0, 0, 0.04, 0.01]
 
 #lines for [Be, C, Fe, Mo, W] and columns with [H, D, T, He, Self-Sputtering, O] (O only known for C), in [eV]
 E_TF = np.array([[256, 282, 308, 720, 2208, 0],
@@ -38,53 +41,153 @@ E_thd_chem = [15, 15, 15]   #threshold energy for Y_damage
 E_ths_chem = [2, 1, 1]      #threshold energy for Y_surf                                                                        
 E_th_chem=[31, 27, 29]   
 
-#incident angle in rad
-alpha = 2 * np.pi/6
-
 #target density in [1/m^3]
-n_target = 2.5 #nonsense value
+n_target = 11.3*1e28 #nonsense value?
 
 #Parameters for net erosion specifically for divertor
 lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
 
-#read from data
-T_s = np.array([600] * 3)
-n_e = np.array([1] * 3)
-T_e = np.array([1] * 3)
-T_i = T_e
-dt = np.array([1] * 3)
 
-if len(T_i) == len(T_s) and len(T_i) == len(n_e) and len(T_i) == len(dt): #otherwise code won't run
-    #calculate fluxes for all ion species [H, D, T, C, O] at each single time
-    fluxes = []
-    for m, f in zip(m_i, f_i):
-        fluxes.append(calc.calculateFluxIncidentIon(T_e, T_i, m, n_e, f))
-    fluxes = np.array(fluxes)
+#######################################################################################################################################################################
+#incident angle in rad
+alpha = 2 * np.pi/9
 
-    #calculate sputtering yields [H, D, T, C, O] at each single time
-    Y_i = []
-    for flux, ion in zip(fluxes, ions):
-        Y_i_single = []
-        for i in range(len(flux)): 
-            if flux[i] != 0:
-                Y_i_single.append(calc.calculateTotalErosionYield(ion, T_i[i], 'C', alpha, T_s[i], flux[i]))
-            else:
-                Y_i_single.append(0)
-        Y_i.append(Y_i_single)
-    Y_i = np.array(Y_i)
-    print(Y_i)
+#######################################################################################################################################################################
+#Markus data read in
+settings_dict = {'exp': '20180807.014', 'c':'lowerTestDivertorUnit' ,'tw':[0.0, 8.0],'m':'DWSE' ,'s':'VmaxClusterSlicer(hp=2)'}
+settings_Gao = {'exp': '20180807', 'discharge': '014', 'divertor' : '3lh', 'finger' : '11'}
+interval = 50 #average Intervall = 50 subsequent values of the value arrays below
 
-    #calculate erosion rate caused by all ion species at each single time 
-    erosionRate_i = []
-    for Y_dt, flux in zip(Y_i.T, fluxes.T):
-        erosionRate_i.append(calc.calculateErosionRate(Y_dt, flux, n_target))
-    print(erosionRate_i)
+ne_values, Te_values, positions, data_Ts, t, S = readMarkusData(settings_dict, interval, settings_Gao) 
+#ne in [1/m^3], Te in [eV], positions in [m], data_Ts in [°C]?, t in [s]?, S in [m]?
 
-    #calculate eroded layer thickness over the whole discharge
-    erodedLayerThickness_dt = []
-    for Y_dt, flux, dt_step in zip(Y_i.T, fluxes.T, dt):
-        erodedLayerThickness_dt.append(calc.calculateDeltaErodedLayer(Y_dt, flux, dt_step, n_target))
-    print(erodedLayerThickness_dt)
-    
-    erodedLayerThickness = sum(erodedLayerThickness_dt)
-    print(erodedLayerThickness)
+#modify data arrays so that they fit the functions below
+tii = np.hstack(t)           #times for Gao
+ti = (tii/2) * 1004/interval #same number od times for Lukas data
+tiii = ti.astype(int)
+
+#take the right amount of averages from Lukas data (here every tenth value)
+n_e_values = []
+T_e_values = []
+for ti in tiii:
+    if ti > len(ne_values) - 1: 
+        ti = len(ne_values) - 1
+    n_e_values.append(ne_values[ti])
+    T_e_values.append(Te_values[ti])
+n_e_values = np.array(n_e_values)
+T_e_values = np.array(T_e_values)
+
+#surface temperature array has less measurement positions, extrapolate to further end of target finger by appending the last value as often as neccessary
+T_s_values = []
+if len(data_Ts[0]) < len(n_e_values[0]):
+    for Ts in data_Ts:
+        Ts = Ts.tolist()
+        for i in range (len(n_e_values[0]) - len(data_Ts[0])):
+            Ts.append(Ts[-1]) 
+        #print(Ts)
+        T_s_values.append(Ts)
+T_s_values = np.array(T_s_values)
+T_i_values = T_e_values
+
+dt = [0]
+for i, t_ii in enumerate(tii):
+    if i < (len(tii) - 1):
+        dt.append(tii[1 + i] - t_ii)
+dt = np.array(dt)
+
+#test for same shape, 9 times (lines) and 15 positions (columns)
+#print(np.shape(n_e_values))
+#print(np.shape(T_e_values))
+#print(np.shape(T_s_values))
+#print(np.shape(dt))
+
+#######################################################################################################################################################################
+#read data from archieveDB
+
+#######################################################################################################################################################################
+#calculate erosion related physical quantities
+position_counter = 0 #for how many positions there are usable measurement values (= equal number of T_s, T_e, n_e, dt values)?
+
+#arrays will be 2 dimensional with e.g Y_H[0] being the array of erosion yields at position 1 over all times
+Y_H, Y_D, Y_T, Y_C, Y_O = [], [], [], [], [] 
+erosionRate_dt_position, erodedLayerThickness_dt_position, erodedLayerThickness_position = [], [], []
+
+for T_s, T_e, T_i, n_e in zip(T_s_values.T, T_e_values.T, T_i_values.T, n_e_values.T):
+    if len(T_i) == len(T_s) and len(T_i) == len(n_e) and len(T_i) == len(dt): #otherwise code won't run
+        position_counter += 1
+        #calculate fluxes for all ion species [H, D, T, C, O] at each single time step (number of time steps = len(dt))
+        fluxes = []
+        for m, f in zip(m_i, f_i):
+            fluxes.append(calc.calculateFluxIncidentIon(T_e/k, T_i/k, m, n_e, f)) #T_e and T_i must be in [K], so conversion from [eV] by dividing through k
+        fluxes = np.array(fluxes)   
+        #nested array with fluxes[i] is representing fluxes for one ion species at all times and fluxes.T[i] representing fluxes of all ion species for one single time step 
+
+        #calculate sputtering yields [H, D, T, C, O] at each single time
+        Y_i = []
+        for flux, ion in zip(fluxes, ions):
+            Y_i_single = []
+            for i in range(len(flux)):
+                #iterate over different time steps for one ion species 
+                if flux[i] != 0:
+                    Y_i_single.append(calc.calculateTotalErosionYield(ion, T_i[i], 'C', alpha, T_s[i], flux[i]))
+                else:
+                    Y_i_single.append(0)
+            Y_i.append(Y_i_single)
+        Y_i = np.array(Y_i)
+        #print('Total sputtering yields for the ions [H, D, T, C, O]:\n {Y_i}'.format(Y_i=Y_i))
+        #nested array with Y_i[i] is representing Y for one ion species at all times and Y_i.T[i] representing Y of all ion species for one single time step 
+
+
+        #calculate erosion rate caused by all ion species at each single time 
+        erosionRate_dt = []
+        for Y_dt, flux in zip(Y_i.T, fluxes.T):
+            erosionRate_dt.append(calc.calculateErosionRate(Y_dt, flux, n_target))
+        #print('Erosion rates for the ions [H, D, T, C, O]:\n {erosionRate_dt}'.format(erosionRate_dt=erosionRate_dt))
+        #erosionRate_dt[i] is representing the total erosion rate of all ion species at a single time step
+
+        #calculate eroded layer thickness over the whole discharge
+        erodedLayerThickness_dt = []
+        for Y_dt, flux, dt_step in zip(Y_i.T, fluxes.T, dt):
+            erodedLayerThickness_dt.append(calc.calculateDeltaErodedLayer(Y_dt, flux, dt_step, n_target))
+        #print('Total erosion layer thickness for each time step:\n {erodedLayerThickness_dt}'.format(erodedLayerThickness_dt=erodedLayerThickness_dt))
+        #erodedLayerThickness_dt[i] is representing the total layer thickness eroded by all ion species together during a single time step
+        
+        erodedLayerThickness = []
+        for i in range(len(erodedLayerThickness_dt)):
+            erodedLayerThickness.append(sum(erodedLayerThickness_dt[:i + 1]))
+        #print('Total erosion layer thickness over all x time steps:\n {erodedLayerThickness}'.format(erodedLayerThickness=erodedLayerThickness))
+        #erodedLayerThickness is representing the total layer thickness eroded by all ion species together over all time steps from 0 to x (x in [0, len(dt)])
+
+        Y_H.append(Y_i[0])
+        Y_D.append(Y_i[1])
+        Y_T.append(Y_i[2])
+        Y_C.append(Y_i[3])
+        Y_O.append(Y_i[4])
+        erosionRate_dt_position.append(erosionRate_dt)
+        erodedLayerThickness_dt_position.append(erodedLayerThickness_dt)
+        erodedLayerThickness_position.append(erodedLayerThickness)
+
+time =[list(range(1, len(Y_H[0]) + 1))] * position_counter 
+#print(time)  
+
+position = []
+for i in range(1, position_counter + 1):
+    position.append([i] * (len(time[0])))
+np.hstack(position)
+#print(position)
+
+#print(len(np.hstack(position)), len(np.hstack(Y_H)), len(np.hstack(Y_D)), len(np.hstack(Y_T)), len(np.hstack(Y_C)), len(np.hstack(Y_O)), len(np.hstack(erosionRate_dt_position)), len(np.hstack(erodedLayerThickness_dt_position)), len(np.hstack(erodedLayerThickness_position)))
+tableOverview = {'LangmuirProbe':np.hstack(position),
+                    #'Position':
+                    'time': np.hstack(time),
+                    'Y_H':np.hstack(Y_H), 
+                    'Y_D':np.hstack(Y_D),  
+                    'Y_T':np.hstack(Y_T),  
+                    'Y_C':np.hstack(Y_C), 
+                    'Y_O':np.hstack(Y_O), 
+                    'erosionRate':np.hstack(erosionRate_dt_position),
+                    'erodedLayerThickness':np.hstack(erodedLayerThickness_dt_position),
+                    'totalErodedLayerThickness':np.hstack(erodedLayerThickness_position)}
+tableOverview = pd.DataFrame(tableOverview)
+safe = 'compareMarkus/tableCompareMarkus_{exp}.{discharge}_{divertorUnit}_{moduleFinger}.csv'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertorUnit=settings_Gao['divertor'], moduleFinger=settings_Gao['finger'])
+tableOverview.to_csv(safe, sep=';')

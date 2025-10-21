@@ -71,7 +71,7 @@ def calculatePhysicalSputteringYield(targetMaterial='C', incidentParticle='H', E
     #[Be, C, Fe, Mo, W]
     M2 = np.array([9.01218, 12.011, 55.847, 95.94, 183.85])             #in [u]=[g/mol]     
     Z2 = np.array([4, 6, 26, 42, 74])                           
-    n = np.array([2.5, 2.5, 2.5, 2.5, 2.5])                             #wo kommen die her, Einheit?! -> muss [m^{-3}]      
+    n = np.array([11.3e28, 11.3e28, 11.3e28, 11.3e28, 11.3e28])                             #wo kommen die her, Einheit?! -> muss [m^{-3}]      
     
     #choose applying parameters by setting the indices
     if targetMaterial=="Be":
@@ -105,7 +105,7 @@ def calculatePhysicalSputteringYield(targetMaterial='C', incidentParticle='H', E
         Y0_phys = (Q_y_phys[targetIndex, incidentIndex] * s_n) * (1 - (E_th_phys[targetIndex, incidentIndex]/E)**(2/3)) * ((1 - (E_th_phys[targetIndex, incidentIndex]/E))**2)                                 
 
         #calculate sputtering yield for any incidence angle
-        a_L = (0.04685/ ((((Z1[targetIndex, incidentIndex])**(2/3)) + ((Z2[targetIndex])**(2/3)))**(0.5))) * 1e-9               #in m         
+        a_L = (0.04685/((((Z1[targetIndex, incidentIndex])**(2/3)) + ((Z2[targetIndex])**(2/3)))**(0.5))) * 1e-9               #in m         
         gamma = (4 * M1[targetIndex, incidentIndex] * M2[targetIndex])/((M1[targetIndex, incidentIndex] + M2[targetIndex])**2)  
         f_y = np.sqrt(E_s[targetIndex]) * (0.94 - 0.00133 * (M2[targetIndex]/M1[targetIndex, incidentIndex]))                   #E_s in [eV]                                              
         a_max = np.pi/2 - (a_L * n[targetIndex]**(1/3))/(np.sqrt(2 * epsilon * np.sqrt(E_s[targetIndex]/(gamma * E))))        #n in m{-3}, E_s in [eV], a_L in [m]
@@ -225,7 +225,7 @@ def calculateChemicalErosionYield(incidentParticle='H', E=2, T_s=600, flux=1e22)
         if E<E_ths_chem[incidentIndex]:
             Y_surf = 0
         else:
-            Y_surf = (s_chem * Q_y_chem[incidentIndex] * s_n * (1 - ((E_th_chem[incidentIndex]/E)**(2/3))) * ((1 - (E_th_chem[incidentIndex]/E))**2))/(1 + np.exp((E - 65)/40))                    #E in [eV]
+            Y_surf = (s_chem * Q_y_chem[incidentIndex] * s_n * (1 - ((E_ths_chem[incidentIndex]/E)**(2/3))) * ((1 - (E_ths_chem[incidentIndex]/E))**2))/(1 + np.exp((E - 65)/40))                    #E in [eV]
         if i<3:
             Y_chem += (Y_surf + Y_therm * (1 + C_d_chem[incidentIndex] * Y_damage))/4
         else:
@@ -244,18 +244,13 @@ def calculateChemicalErosionYieldRoth(incidentParticle='H', E=2, T_s=600, flux=1
         incidentIndex = 2   
     targetIndex = 1             #target is made from graphite, index to access E_TF       
 
-    if E==0:
+    if E<E_th_chem[incidentIndex]:
         Y_chem = 0
     else:                     
         #calculate physical sputtering as needed to determine ion-induced chem. erosion by bond breaking
         epsilon = E/E_TF[targetIndex, incidentIndex]                                                                                          
         s_n = (0.5 * np.log(1 + 1.2288 * epsilon))/(epsilon + 0.1728 * np.sqrt(epsilon) + 0.008 * epsilon**(0.1504))
         Y_phys = (Q_y_chem[incidentIndex] * s_n) * (1 - (E_th_chem[incidentIndex]/E)**(2/3)) * ((1 - (E_th_chem[incidentIndex]/E))**2)                                          #Y als Funktion von E und dem Winkel alpha=0
-        
-        if Y_phys<0:
-            Y_phys = 0
-        else:
-            pass
         
         #calculate parameters for chem erosion
         C = 1/(1 + 1e13 * np.exp(-2.45/(k * T_s)))
@@ -280,6 +275,7 @@ def calculateChemicalErosionYieldHighFlux(Y_chem_lowFlux=1e-3, flux=1e22):
 def energyDistributionIons(E=2, T_i=1, q=1):
     return 4 * (1/(2 * T_i))**2 * (E - 3 * T_i * q) * np.exp(-(E - 3 * T_i * q)/(T_i))
 
+#E and T_i in [eV], T_s in [K], flux in [ions/(s m^2)]
 def calculateTotalErosionYield(incidentParticle, T_i, targetMaterial='C', alpha=np.pi/4, T_s=600, flux=1e22):
     if incidentParticle=="C":
         q_i = 2
@@ -289,7 +285,7 @@ def calculateTotalErosionYield(incidentParticle, T_i, targetMaterial='C', alpha=
         q_i = 1
     def Integral(incidentParticle, E, T_i, targetMaterial='C', alpha=np.pi/4, T_s=600, flux=1e22):
         if incidentParticle=="H":
-            Y = calculatePhysicalSputteringYield(targetMaterial, 'H', E, alpha) + calculateChemicalErosionYield('H', E, T_s, flux)
+            Y = calculatePhysicalSputteringYield(targetMaterial, 'H', E, alpha) + calculateChemicalErosionYieldRoth('H', E, T_s, flux)#+ calculateChemicalErosionYield('H', E, T_s, flux)
         elif incidentParticle=="D":
             Y = calculatePhysicalSputteringYield(targetMaterial, 'D', E, alpha) + calculateChemicalErosionYield('D', E, T_s, flux)
         elif incidentParticle=="T":
