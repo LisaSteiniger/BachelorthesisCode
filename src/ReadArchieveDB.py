@@ -5,6 +5,25 @@ import os
 import w7xarchive   #see https://git.ipp-hgw.mpg.de/kjbrunne/w7xarchive/-/blob/master/doc/workshop.ipynb for introduction
 import matplotlib.pyplot as plt
 import numpy as np
+from src.dlp_data.dlp_data import extract_divertor_probe_data as extract
+
+def readLangmuirProbeDataFromXdrive(dischargeID):
+    #if 8 files are not found, that is ok -> they are at TM8h and only exist for high iota discharges
+    data_lower, data_upper = extract.fetch_xdrive_data(shot = dischargeID)
+    if data_lower[0].units['time'] == 's' and data_lower[0].units['ne'] == '10$^{18}$m$^{-3}$' and data_lower[0].units['Te'] == 'eV':
+        ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper = [], [], [], [], [], []
+        for i in range(len(data_lower)):
+            ne_lower.append(list(data_lower[i].ne))
+            ne_upper.append(data_upper[i].ne)
+            Te_lower.append(data_lower[i].Te)
+            Te_upper.append(data_upper[i].Te)
+            t_lower.append(data_lower[i].time)
+            t_upper.append(data_upper[i].time)
+        
+        #careful, not all subarrays have the same shape, len(Te_upper[0]) == len(ne_upper[0]), but not neccessarily len(Te_upper[0]) == len(Te_upper[1])
+        return ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper
+    else:
+        return 'wrong units'
 
 def readArchieveDB():
     shotnumbersOP1 = ['20181018.041']

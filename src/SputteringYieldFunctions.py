@@ -231,6 +231,12 @@ def calculateChemicalErosionYield(incidentParticle='H', E=2, T_s=600, flux=1e22)
         else:
             Y_chem += (Y_surf + Y_therm * (1 + C_d_chem[incidentIndex] * Y_damage))/8
     
+    #test for high fluxes
+    if flux < 1e+21:
+        pass
+    else:
+        Y_chem = calculateChemicalErosionYieldHighFlux(Y_chem, flux)
+        
     return Y_chem
 
 #Chemical erosion yield for low fluxes following Roths Formula, provide E in [eV], T_s in [K], flux in [ions/(s m^2)], k in [eV/K]
@@ -244,27 +250,39 @@ def calculateChemicalErosionYieldRoth(incidentParticle='H', E=2, T_s=600, flux=1
         incidentIndex = 2   
     targetIndex = 1             #target is made from graphite, index to access E_TF       
 
+    #calculate parameters for chem erosion
+    C = 1/(1 + 1e13 * np.exp(-2.45/(k * T_s)))
+    c_sp3 = (C * (2 * 1e-32 * flux + np.exp(-1.7/(k * T_s))))/(2 * 1e-32 * flux + (1 + (2 * 1e29/flux) * np.exp(-1.8/(k * T_s))) * np.exp(-1.7/(k * T_s)))
+    epsilon = E/E_TF[targetIndex, incidentIndex]                                                                                          
+    s_n = (0.5 * np.log(1 + 1.2288 * epsilon))/(epsilon + 0.1728 * np.sqrt(epsilon) + 0.008 * epsilon**(0.1504))
+        
+    #calculate subprocesses erosion yields 
+    #calculate physical sputtering as needed to determine ion-induced chem. erosion by bond breaking   
     if E<E_th_chem[incidentIndex]:
-        Y_chem = 0
+        Y_phys = 0
     else:                     
-        #calculate physical sputtering as needed to determine ion-induced chem. erosion by bond breaking
-        epsilon = E/E_TF[targetIndex, incidentIndex]                                                                                          
-        s_n = (0.5 * np.log(1 + 1.2288 * epsilon))/(epsilon + 0.1728 * np.sqrt(epsilon) + 0.008 * epsilon**(0.1504))
         Y_phys = (Q_y_chem[incidentIndex] * s_n) * (1 - (E_th_chem[incidentIndex]/E)**(2/3)) * ((1 - (E_th_chem[incidentIndex]/E))**2)                                          #Y als Funktion von E und dem Winkel alpha=0
-        
-        #calculate parameters for chem erosion
-        C = 1/(1 + 1e13 * np.exp(-2.45/(k * T_s)))
-        c_sp3 = (C * (2 * 1e-32 * flux + np.exp(-1.7/(k * T_s))))/(2 * 1e-32 * flux + ((2 * 1e29/flux) * np.exp(-1.8/(k * T_s))) * np.exp(-1.7/(k * T_s)))
-        
-        #calculate subprocesses and total chemical erosion yield
+    
+    if E<E_ths_chem[incidentIndex]:
+        Y_surf = 0
+    else:  
         Y_surf = (c_sp3 * (Q_y_chem[incidentIndex] * s_n * (1 - (E_ths_chem[incidentIndex]/E)**(2/3)) * ((1 - (E_ths_chem[incidentIndex]/E))**2)))/(1 + np.exp((E - 90)/50))
-        Y_therm = (c_sp3 * (0.033 * np.exp(-1.7/(k * T_s))))/(2 * 1e-32 * flux + np.exp(-1.7/(k * T_s)))
-        Y_chem = Y_therm * (1 + C_d_chem[incidentIndex] * Y_phys) + Y_surf
-        
+            
+    Y_therm = (c_sp3 * (0.033 * np.exp(-1.7/(k * T_s))))/(2 * 1e-32 * flux + np.exp(-1.7/(k * T_s)))
+    
+    #calculate total chemical erosion yield
+    Y_chem = Y_therm * (1 + C_d_chem[incidentIndex] * Y_phys) + Y_surf
+
+    #test for high fluxes
+    if flux < 1e+21:
+        pass
+    else:
+        Y_chem = calculateChemicalErosionYieldHighFlux(Y_chem, flux)
+
     return Y_chem
 
 
-#Chemical erosion yield for high fluxes, provide flux in [ions/(s m^2)]
+#Chemical erosion yield for high fluxes (>=1e+21), provide flux in [ions/(s m^2)]
 def calculateChemicalErosionYieldHighFlux(Y_chem_lowFlux=1e-3, flux=1e22):
     return Y_chem_lowFlux/(1 + (flux/(6 * 1e21))**0.54)
 
