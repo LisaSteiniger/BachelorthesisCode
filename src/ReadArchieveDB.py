@@ -5,98 +5,100 @@ import os
 import w7xarchive   #see https://git.ipp-hgw.mpg.de/kjbrunne/w7xarchive/-/blob/master/doc/workshop.ipynb for introduction
 import matplotlib.pyplot as plt
 import numpy as np
-from src.dlp_data.dlp_data import extract_divertor_probe_data as extract
+from src.dlp_data import extract_divertor_probe_data as extract
+from src.heatflux_T import heatflux_T_download
 
+#######################################################################################################################################################################
+def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_position, LP_number):
+    ''' returns surface temperature of divertor in "discharge" to given "times" at given "divertorUnits" at position closest to langmuir probes
+        returns arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
+        provide times in [s], divertorunits either "upper" or "lower" LP_position as array with distances of all probes from pumping gap in [m], and LP_number being the number of active langmuir probes (14 for EIM, 4/18 for FTM)
+        LPs are numbered as follows: TM2h07 holds probe 0 to 5, TM3h01 6 to 13, TM8h01 14 to 17 -> LP_positions should take numbers as indices
+        for reading temperature, TM2h06 and TM3h02 are chosen as 07 and 01 are subject to leading edges'''
+    T_data = []
+    if LP_number < 5:
+        targetElements = ['TM8h_01']
+        LP_position_indices = [[14, 15, 16, 17]]
+    elif LP_number < 15:
+        targetElements = ['TM2h_06', 'TM3h_02']
+        LP_position_indices = [range(4), range(4, 14)]
+    else:
+        targetElements = ['TM2h_06', 'TM3h_02', 'TM8h_01']
+        LP_position_indices = [range(4), range(4, 14), range(14, 18)]
+
+    for divertorUnit in divertorUnits:
+        T_data_divertor = []
+        if divertorUnit == 'upper':
+            camera = 'AEF51'
+        elif divertorUnit == 'lower':
+            camera = 'AEF50'
+        else: 
+            print('Undefined divertor Unit')
+            exit
+
+        for time in times:
+            test = heatflux_T_download.heatflux_T_process(dischargeID, camera)
+            pulse_duration = test.availtimes[-1] - 1
+
+            if time + 0.01 > pulse_duration: #if no frames are present for the time interval
+                T_data_dt = [0] * LP_number
+            else:
+                test.get_Frames(time,  time + 0.1, T = True) #get frame for whole divertor unit in certain time interval
+                T_data_dt = []
+                for targetElement, LP_position_index in zip(targetElements, LP_position_indices):
+                    test.get_Profiles(targetElement, AverageNearby=1000) #get data for one target element
+                    distance = test.stackS.tolist() #distance from pumping gap in [m] for all measured positions on the target element
+
+                    for index in LP_position_index: #find measurement position of T that is closest to langmuir probe
+                        closestIndex = distance.index(min(distance, key=lambda x: abs(x - LP_position[index])))
+                        #print(distance[closestIndex])
+                        T_data_dt.append(test.datas.T[closestIndex][0] + 273.15)   #conversion from degrees C to K 
+            
+            T_data_divertor.append(T_data_dt)
+        T_data.append(T_data_divertor)
+        
+    return np.array(T_data[0]).T, np.array(T_data[1]).T
+    
+#######################################################################################################################################################################
 def readLangmuirProbeDataFromXdrive(dischargeID):
     #if 8 files are not found, that is ok -> they are at TM8h and only exist for high iota discharges
     data_lower, data_upper = extract.fetch_xdrive_data(shot = dischargeID)
     if data_lower[0].units['time'] == 's' and data_lower[0].units['ne'] == '10$^{18}$m$^{-3}$' and data_lower[0].units['Te'] == 'eV':
         ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper = [], [], [], [], [], []
         for i in range(len(data_lower)):
-            ne_lower.append(list(data_lower[i].ne))
-            ne_upper.append(data_upper[i].ne)
-            Te_lower.append(data_lower[i].Te)
-            Te_upper.append(data_upper[i].Te)
-            t_lower.append(data_lower[i].time)
-            t_upper.append(data_upper[i].time)
+            #ne_lower.append(list(data_lower[i].ne)) 
+            
+            #filter out measurements that are nonexisting
+            filter_lower = np.array([j == 0 for j in data_lower[i].time])
+            filter_upper = np.array([j == 0 for j in data_upper[i].time])
+
+            ne_lower.append(list(np.array(data_lower[i].ne)[~filter_lower]))
+            ne_upper.append(list(np.array(data_upper[i].ne)[~filter_upper]))
+            Te_lower.append(list(np.array(data_lower[i].Te)[~filter_lower]))
+            Te_upper.append(list(np.array(data_upper[i].Te)[~filter_upper]))
+            t_lower.append(list(np.array(data_lower[i].time)[~filter_lower]))
+            t_upper.append(list(np.array(data_upper[i].time)[~filter_upper]))
         
         #careful, not all subarrays have the same shape, len(Te_upper[0]) == len(ne_upper[0]), but not neccessarily len(Te_upper[0]) == len(Te_upper[1])
         return ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper
     else:
         return 'wrong units'
 
-def readArchieveDB():
-    shotnumbersOP1 = ['20181018.041']
-    shotnumbersOP2 = ['20250424.050']
-
-    #for OP1.2
-    #Langmuir Probes, #numbersOP1 in range [1, 20]
-    divertorUnitsOP1 = ['lowerTestDivertorUnit', 'upperTestDivertorUnit']
-
-    #IR cameras
-
-    #for OP2
-    #Langmuir Probes, numbersOP2 in range [1, 14]
-    divertorUnitsOP2 = ['LowerDivertor', 'UpperDivertor']
-    #IR cameras
-    
-    for shotnumber in shotnumbersOP1:
-        #for OP1
-        for divertorUnitOP1 in divertorUnitsOP1:
-            for numberOP1 in range(1, 2):#21):
-                #called like this time is in seconds from t1 (program start?)
-                data_urls_OP1 = {'LP_ne':"ArchiveDB/raw/Minerva/Minerva.ElectronDensity.QRP.{divertorUnit}.{number}/ne_DATASTREAM/V1/0/ne".format(divertorUnit=divertorUnitOP1, number=numberOP1),
-                                'LP_Te':"ArchiveDB/raw/Minerva/Minerva.ElectronTemperature.QRP.{divertorUnit}.{number}/Te_DATASTREAM/V1/0/Te".format(divertorUnit=divertorUnitOP1, number=numberOP1)}
-                #add error of the datastreams
-
-                #enables parallel download if data_urls_OP1 is dictionary
-                data_OP1 = w7xarchive.get_signal_for_program(data_urls_OP1, shotnumber) 
-                #data_OP1['LP_ne'][0] to access time trace of ne measurement, data_OP1['LP_ne'][1] to access ne data
-                #data_OP1['LP_Te'][0] to access time trace of Te measurement, data_OP1['LP_Te'][1]to access Te data
-                
-                #just to test if reading the data works properly
-                plt.figure()
-                plt.plot(data_OP1['LP_ne'][0], data_OP1['LP_ne'][1])
-                plt.plot(data_OP1['LP_Te'][0], data_OP1['LP_Te'][1])
-                plt.gca().set_xlabel("time [s]")
-                plt.gca().set_ylabel("data")
-                plt.show()
-                pass
-
-    for shotnumber in shotnumbersOP2:
-        #for OP2
-        for divertorUnitOP2 in divertorUnitsOP2:
-            for numberOP2 in range(1, 2):#14):
-                #called like this time is in seconds from t1
-                data_urls_OP2 = {'LP_ne':"ArchiveDB/raw/W7XAnalysis/QRP02_Langmuirprobes/{divertorUnit}_Probe_{number}_DATASTREAM/V1/1/Plasma_Density".format(divertorUnit=divertorUnitOP2, number=numberOP2),
-                                'LP_Te':"ArchiveDB/raw/W7XAnalysis/QRP02_Langmuirprobes/{divertorUnit}_Probe_{number}_DATASTREAM/V1/2/Electron_Temperature".format(divertorUnit=divertorUnitOP2, number=numberOP2)}
-                #add error of the datastreams
-
-                data_OP2 = w7xarchive.get_signal_for_program(data_urls_OP2, shotnumber)
-                #just to test if reading the data works properly
-                
-                plt.figure()
-                plt.plot(data_OP2['LP_ne'][0], data_OP2['LP_ne'][1])
-                plt.plot(data_OP2['LP_Te'][0], data_OP2['LP_Te'][1])
-                plt.gca().set_xlabel("time [s]")
-                plt.gca().set_ylabel("data")
-                plt.show()
-                pass
-
+#######################################################################################################################################################################
 def readMarkusData(settings_dict, interval, settings_Gao):
     #get n_e data from Langmuir Probes
-    ne_path = os.path.join('Daten_LP', settings_dict['exp'], '{c}_{q}_{tw}_{m}_{s}.npz'.format(c=settings_dict['c'], q='ne', tw=settings_dict['tw'], m=settings_dict['m'], s=settings_dict['s']))
+    ne_path = os.path.join('inputFiles/Daten_LP', settings_dict['exp'], '{c}_{q}_{tw}_{m}_{s}.npz'.format(c=settings_dict['c'], q='ne', tw=settings_dict['tw'], m=settings_dict['m'], s=settings_dict['s']))
     time, positions, ne_values = dict(np.load(ne_path,allow_pickle=True)).values() #n_e_values is 2dimensional with lines representing positions and columns the times
 
     #get T_e data from Langmuir Probes
-    Te_path = os.path.join('Daten_LP', settings_dict['exp'], '{c}_{q}_{tw}_{m}_{s}.npz'.format(c=settings_dict['c'], q='Te', tw=settings_dict['tw'], m=settings_dict['m'], s=settings_dict['s']))
+    Te_path = os.path.join('inputFiles/Daten_LP', settings_dict['exp'], '{c}_{q}_{tw}_{m}_{s}.npz'.format(c=settings_dict['c'], q='Te', tw=settings_dict['tw'], m=settings_dict['m'], s=settings_dict['s']))
     time, positions, Te_values = dict(np.load(Te_path,allow_pickle=True)).values() #T_e_values is 2dimensional with lines representing positions and columns the times
 
     #get variances for n_e and T_e, same data structure as for n_e, T_e
-    ne_path = os.path.join('Daten_LP', settings_dict['exp'], '{c}_{q}_{tw}_{m}_{s}.npz'.format(c=settings_dict['c'], q='variancene', tw=settings_dict['tw'], m=settings_dict['m'], s=settings_dict['s']))
+    ne_path = os.path.join('inputFiles/Daten_LP', settings_dict['exp'], '{c}_{q}_{tw}_{m}_{s}.npz'.format(c=settings_dict['c'], q='variancene', tw=settings_dict['tw'], m=settings_dict['m'], s=settings_dict['s']))
     time_var, positions_var, ne_values_var = dict(np.load(ne_path,allow_pickle=True)).values()
 
-    Te_path = os.path.join('Daten_LP', settings_dict['exp'], '{c}_{q}_{tw}_{m}_{s}.npz'.format(c=settings_dict['c'], q='varianceTe', tw=settings_dict['tw'], m=settings_dict['m'], s=settings_dict['s']))
+    Te_path = os.path.join('inputFiles/Daten_LP', settings_dict['exp'], '{c}_{q}_{tw}_{m}_{s}.npz'.format(c=settings_dict['c'], q='varianceTe', tw=settings_dict['tw'], m=settings_dict['m'], s=settings_dict['s']))
     time_var, positions_var, Te_values_var = dict(np.load(Te_path,allow_pickle=True)).values()
 
     #convert n_e and its variances in 1/m^3, positions and their variances in m
@@ -175,10 +177,10 @@ def readMarkusData(settings_dict, interval, settings_Gao):
 
     #read Gao's data
     #lines represent one time each, columns are positions in data? S corresponds to position
-    Gao_path_data = os.path.join('Daten von Gao/{exp}_{discharge}_{divertor}_{l}_{finger}/data.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger']))
-    Gao_path_t = os.path.join('Daten von Gao/{exp}_{discharge}_{divertor}_{l}_{finger}/t.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger']))
-    Gao_path_S = os.path.join('Daten von Gao/{exp}_{discharge}_{divertor}_{l}_{finger}/S.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger']))
-    Gao_path_data_PF = os.path.join('Daten von Gao PF/{exp}_{discharge}_{divertor}_{l}_{finger}_{PF}/data_PF.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger'], PF='PF'))
+    Gao_path_data = os.path.join('inputFiles/Daten von Gao/{exp}_{discharge}_{divertor}_{l}_{finger}/data.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger']))
+    Gao_path_t = os.path.join('inputFiles/Daten von Gao/{exp}_{discharge}_{divertor}_{l}_{finger}/t.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger']))
+    Gao_path_S = os.path.join('inputFiles/Daten von Gao/{exp}_{discharge}_{divertor}_{l}_{finger}/S.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger']))
+    Gao_path_data_PF = os.path.join('inputFiles/Daten von Gao PF/{exp}_{discharge}_{divertor}_{l}_{finger}_{PF}/data_PF.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger'], PF='PF'))
 
     #read out data for temperatures in [°C]?
     data_Ts1= open(Gao_path_data, 'r').readlines()
@@ -269,3 +271,62 @@ def readMarkusData(settings_dict, interval, settings_Gao):
 
     #further calculations use only ne_values, Te_values and positions from this data
     return ne_values, Te_values, positions, data_Ts, t, S
+
+#######################################################################################################################################################################
+def readArchieveDB():
+    shotnumbersOP1 = ['20181018.041']
+    shotnumbersOP2 = ['20250424.050']
+
+    #for OP1.2
+    #Langmuir Probes, #numbersOP1 in range [1, 20]
+    divertorUnitsOP1 = ['lowerTestDivertorUnit', 'upperTestDivertorUnit']
+
+    #IR cameras
+
+    #for OP2
+    #Langmuir Probes, numbersOP2 in range [1, 14]
+    divertorUnitsOP2 = ['LowerDivertor', 'UpperDivertor']
+    #IR cameras
+    
+    for shotnumber in shotnumbersOP1:
+        #for OP1
+        for divertorUnitOP1 in divertorUnitsOP1:
+            for numberOP1 in range(1, 2):#21):
+                #called like this time is in seconds from t1 (program start?)
+                data_urls_OP1 = {'LP_ne':"ArchiveDB/raw/Minerva/Minerva.ElectronDensity.QRP.{divertorUnit}.{number}/ne_DATASTREAM/V1/0/ne".format(divertorUnit=divertorUnitOP1, number=numberOP1),
+                                'LP_Te':"ArchiveDB/raw/Minerva/Minerva.ElectronTemperature.QRP.{divertorUnit}.{number}/Te_DATASTREAM/V1/0/Te".format(divertorUnit=divertorUnitOP1, number=numberOP1)}
+                #add error of the datastreams
+
+                #enables parallel download if data_urls_OP1 is dictionary
+                data_OP1 = w7xarchive.get_signal_for_program(data_urls_OP1, shotnumber) 
+                #data_OP1['LP_ne'][0] to access time trace of ne measurement, data_OP1['LP_ne'][1] to access ne data
+                #data_OP1['LP_Te'][0] to access time trace of Te measurement, data_OP1['LP_Te'][1]to access Te data
+                
+                #just to test if reading the data works properly
+                plt.figure()
+                plt.plot(data_OP1['LP_ne'][0], data_OP1['LP_ne'][1])
+                plt.plot(data_OP1['LP_Te'][0], data_OP1['LP_Te'][1])
+                plt.gca().set_xlabel("time [s]")
+                plt.gca().set_ylabel("data")
+                plt.show()
+                pass
+
+    for shotnumber in shotnumbersOP2:
+        #for OP2
+        for divertorUnitOP2 in divertorUnitsOP2:
+            for numberOP2 in range(1, 2):#14):
+                #called like this time is in seconds from t1
+                data_urls_OP2 = {'LP_ne':"ArchiveDB/raw/W7XAnalysis/QRP02_Langmuirprobes/{divertorUnit}_Probe_{number}_DATASTREAM/V1/1/Plasma_Density".format(divertorUnit=divertorUnitOP2, number=numberOP2),
+                                'LP_Te':"ArchiveDB/raw/W7XAnalysis/QRP02_Langmuirprobes/{divertorUnit}_Probe_{number}_DATASTREAM/V1/2/Electron_Temperature".format(divertorUnit=divertorUnitOP2, number=numberOP2)}
+                #add error of the datastreams
+
+                data_OP2 = w7xarchive.get_signal_for_program(data_urls_OP2, shotnumber)
+                #just to test if reading the data works properly
+                
+                plt.figure()
+                plt.plot(data_OP2['LP_ne'][0], data_OP2['LP_ne'][1])
+                plt.plot(data_OP2['LP_Te'][0], data_OP2['LP_Te'][1])
+                plt.gca().set_xlabel("time [s]")
+                plt.gca().set_ylabel("data")
+                plt.show()
+                
