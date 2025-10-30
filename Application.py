@@ -1,5 +1,5 @@
-'''This file is responsible for the final calculation of sputtering yields and thickness of the erosion layer. 
-It uses the functions defined in SputteringYieldFunctions after reading the data from the archieveDB'''
+''' This file is responsible for the final calculation of sputtering yields and the thickness of the erosion layer. 
+    It uses the functions defined in SputteringYieldFunctions after reading the data from the archieveDB'''
 
 import os
 import w7xarchive
@@ -21,11 +21,12 @@ matplotlib.use('agg')
 
 #######################################################################################################################################################################
 #######################################################################################################################################################################
+#INPUT NOT TO BE CHANGED
 #initialize common parameter values
 e  =  scipy.constants.elementary_charge 
 u = scipy.constants.u   #to convert M in [u] to m in [kg]: M * u = m
 k_B = scipy.constants.Boltzmann
-k = k_B/e 
+k = k_B/e  #Boltzmann constant in [eV/K]
 
 #ion masses in [kg] and ion concentrations (no unit) for [H, D, T, C, O]
 ions = ['H', 'D', 'T', 'C', 'O']
@@ -55,20 +56,23 @@ n_target = 11.3*1e28 #nonsense value?
 #Parameters for net erosion specifically for divertor
 lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
 
-
 #######################################################################################################################################################################
+#######################################################################################################################################################################
+#VARIABLE INPUT PARAMETERS
 #incident angle in rad
 alpha = 2 * np.pi/9
 
 #dischargeID
-discharge = '20250429.048'   #20241127.034'
+discharge = '20250304.086'   #20241127.034'
 
 #######################################################################################################################################################################
 #######################################################################################################################################################################
+#PROGRAM CODE FOR OP1.2b EXAMPLE DISCHARGES
 #Markus data read in, "intervals" defines how many adjacent values are averaged
 #processMarkusData(m_i, f_i, ions, k, n_target, interval = 50)
 
 #######################################################################################################################################################################
+#PROGRAM CODE FOR OP2 DISCHARGE GIVEN AS "DISCHARGE"
 if __name__ == '__main__':
     #_lower indicates lower divertor unit, _upper upper divertor unit
 
@@ -82,7 +86,8 @@ if __name__ == '__main__':
     #read Langmuir Probe data from xdrive
     #all arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
     #ne in [1/m^3], Te in [eV] and assumption that Te=Ti, t in [s]
-    ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper = read.readLangmuirProbeDataFromXdrive(discharge)
+    #index represent the active LPs on each divertor unit
+    ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper, index_lower, index_upper = read.readLangmuirProbeDataFromXdrive(discharge)
 
     #all Langmuir Probes measure at the same times but some will stop earlier than others 
     #-> time_array holds all times that are represented in one discharge at any LP
@@ -96,9 +101,9 @@ if __name__ == '__main__':
     #print(time_array)
     
     #read IRcam data for both divertor units
-    #len(t_upper) represents the number of active LPs per divertor unit (14 for EIM, 4/18 for FTM?)
+    #index represent the active LPs on each divertor unit
     #Ts in [K], LP_position in [m] from pumping gap, time_array in [s]
-    Ts_lower, Ts_upper = read.readSurfaceTemperatureFramesFromIRcam(discharge, time_array, ['lower', 'upper'], LP_position, len(t_upper))
+    Ts_lower, Ts_upper = read.readSurfaceTemperatureFramesFromIRcam(discharge, time_array, ['lower', 'upper'], LP_position, [index_lower, index_upper])
     
     #missing measurement times and values are replaced by adding arrays of 0 to guarantee same data structure of all arrays concerning t, Te, Ts, ne
     for j in range(len(ne_lower)):
@@ -127,7 +132,7 @@ if __name__ == '__main__':
     #plots are saved in safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=divertorUnit, position=position)
     process.processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, True)
 
-#LF will be replaced by CRLF the next time Git touches it
+#Warning from GitBash when heatflux code was added: LF will be replaced by CRLF the next time Git touches it
 #######################################################################################################################################################################
 #read data from archieveDB
 

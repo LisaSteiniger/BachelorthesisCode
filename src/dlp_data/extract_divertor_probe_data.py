@@ -15,6 +15,7 @@ def fetch_xdrive_data(shot):
     """
     shot: acceptable format yyyymmdd.ss or  yyyymmdd.sss or "yyyymmdd.sss"
     """
+    exception_lower, exception_upper = [], []#I added this line
     shot = uniform_shot_number(shot)
     data_lower = {}
     data_upper = {}
@@ -26,13 +27,15 @@ def fetch_xdrive_data(shot):
                 data_upper[idx] = get_parameters_probe(name, shot)
             except Exception as e:
                 print(e)
+                exception_upper.append(int(name))#I added this line
         else:
             idx = probes_lower.index(int(name))
             try:
                 data_lower[idx] = get_parameters_probe(name, shot)
             except Exception as e:
                 print(e)
-    return data_lower, data_upper
+                exception_lower.append(int(name))#I added this line
+    return data_lower, data_upper, exception_lower, exception_upper #I added exception
 
 def get_parameters_probe(probename, shot, return_dict = False):
     """

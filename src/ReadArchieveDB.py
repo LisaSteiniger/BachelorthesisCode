@@ -1,5 +1,6 @@
-'''This file contains the functions neccessary for pulling data from w7xArchieveDB and finding typical parameters for discharges of certain configurations.
-It also works with juice to find information about the discharges (percentage of EIM/FTM/KJM, ...).'''
+''' This file contains the functions neccessary for pulling data from w7xArchieveDB and finding typical parameters for discharges of certain configurations.
+    As most data for OP2.2/2.3 is not yet uploaded to ArchiveDB, functions for reading from xdrive and other storage options are provided to guarantee access to a mayority of the data
+    Nevertheless, some discharges remain unavailable and even existing data is not cross checked and processed further (e.g. no removal of surface layer effects on divertor temperature)'''
 
 import os
 import w7xarchive   #see https://git.ipp-hgw.mpg.de/kjbrunne/w7xarchive/-/blob/master/doc/workshop.ipynb for introduction
@@ -9,13 +10,14 @@ from src.dlp_data import extract_divertor_probe_data as extract
 from src.heatflux_T import heatflux_T_download
 
 #######################################################################################################################################################################
-def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_position, LP_number):
+def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_position, index_divertorUnit):
     ''' returns surface temperature of divertor in "discharge" to given "times" at given "divertorUnits" at position closest to langmuir probes
         returns arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
-        provide times in [s], divertorunits either "upper" or "lower" LP_position as array with distances of all probes from pumping gap in [m], and LP_number being the number of active langmuir probes (14 for EIM, 4/18 for FTM)
-        LPs are numbered as follows: TM2h07 holds probe 0 to 5, TM3h01 6 to 13, TM8h01 14 to 17 -> LP_positions should take numbers as indices
+        provide times in [s], divertorunits either "upper" or "lower" LP_position as array with distances of all probes from pumping gap in [m], and index_divertorUnit a list of lists with the indices of active langmuir probes in a divertor unit
+        LPs are numbered as follows: TM2h07 holds probe 0 to 5, TM3h01 6 to 13, TM8h01 14 to 17 -> LP_positions should take numbers as indices, index_divertorUnits applies same scheme
         for reading temperature, TM2h06 and TM3h02 are chosen as 07 and 01 are subject to leading edges'''
     T_data = []
+    '''
     if LP_number < 5:
         targetElements = ['TM8h_01']
         LP_position_indices = [[14, 15, 16, 17]]
@@ -25,8 +27,8 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_
     else:
         targetElements = ['TM2h_06', 'TM3h_02', 'TM8h_01']
         LP_position_indices = [range(4), range(4, 14), range(14, 18)]
-
-    for divertorUnit in divertorUnits:
+    '''
+    for divertorUnit, LP_indices in zip(divertorUnits, index_divertorUnit):
         T_data_divertor = []
         if divertorUnit == 'upper':
             camera = 'AEF51'
@@ -41,51 +43,92 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_
             pulse_duration = test.availtimes[-1] - 1
 
             if time + 0.01 > pulse_duration: #if no frames are present for the time interval
-                T_data_dt = [0] * LP_number
+                T_data_dt = [0] * len(LP_indices)
             else:
                 test.get_Frames(time,  time + 0.1, T = True) #get frame for whole divertor unit in certain time interval
                 T_data_dt = []
-                for targetElement, LP_position_index in zip(targetElements, LP_position_indices):
+
+                for LP_index in LP_indices:
+                    if LP_index < 6:
+                        targetElement = 'TM2h_06'
+                    elif LP_index < 14:
+                        targetElement = 'TM3h_02'
+                    else:
+                        targetElement = 'TM8h_01'    
+
                     test.get_Profiles(targetElement, AverageNearby=1000) #get data for one target element
                     distance = test.stackS.tolist() #distance from pumping gap in [m] for all measured positions on the target element
 
-                    for index in LP_position_index: #find measurement position of T that is closest to langmuir probe
-                        closestIndex = distance.index(min(distance, key=lambda x: abs(x - LP_position[index])))
-                        #print(distance[closestIndex])
-                        T_data_dt.append(test.datas.T[closestIndex][0] + 273.15)   #conversion from degrees C to K 
+                    closestIndex = distance.index(min(distance, key=lambda x: abs(x - LP_position[LP_index])))  #find measurement position of T that is closest to langmuir probe
+                    #print(distance[closestIndex])
+                    T_data_dt.append(test.datas.T[closestIndex][0] + 273.15)   #conversion from degrees C to K 
             
             T_data_divertor.append(T_data_dt)
         T_data.append(T_data_divertor)
-        
-    return np.array(T_data[0]).T, np.array(T_data[1]).T
+
+    if len(T_data) == 2:    
+        return np.array(T_data[0]).T, np.array(T_data[1]).T
+    else:
+        return np.array(T_data[0]).T
     
 #######################################################################################################################################################################
 def readLangmuirProbeDataFromXdrive(dischargeID):
-    #if 8 files are not found, that is ok -> they are at TM8h and only exist for high iota discharges
-    data_lower, data_upper = extract.fetch_xdrive_data(shot = dischargeID)
-    if data_lower[0].units['time'] == 's' and data_lower[0].units['ne'] == '10$^{18}$m$^{-3}$' and data_lower[0].units['Te'] == 'eV':
+    ''' returns electron temperature Te in [eV] and electron density ne in [1/m^3] plus corresponding mesurement times in [s] of langmuir probes read from xdrive as well as inormation about which LPs were active
+        returns nested list of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
+        if 8 files are not found, that is ok -> they are at TM8h and only exist for high iota discharges
+        if files are missing, index_upper and index_lower provide the indices for the active probes
+        LPs are numbered as follows: TM2h07 holds probe 0 to 5, TM3h01 6 to 13, TM8h01 14 to 17 -> index_divertorUnits applies same scheme'''
+    #internal naming of probes in xdrive
+    probes_lower = [50201, 50203, 50205, 50207, 50209, 50211,  50218, 50220, 50222, 50224, 50226, 50228, 50230, 50232, 50246, 50248, 50249, 50251]
+    probes_upper = [51201, 51203, 51205, 51207, 51209, 51211,  51218, 51220, 51222, 51224, 51226, 51228, 51230, 51232, 51246, 51248, 51249, 51251]
+    
+    #index lists for each divertor unit in cas that all LPs were active
+    index_lower = list(range(18))
+    index_upper = list(range(18))
+    
+    #data stores ne, Te, t, fails record missing LP data
+    data_lower, data_upper, fails_lower, fails_upper = extract.fetch_xdrive_data(shot = dischargeID)
+    
+    #remove indices of inactive/missing LPs
+    for fail in fails_lower:
+        index_lower.remove(probes_lower.index(fail))
+    for fail in fails_upper:
+        index_upper.remove(probes_upper.index(fail))
+
+    #test units as program needs those units to calculate correctly 
+    if data_lower[index_lower[0]].units['time'] == 's' and data_lower[index_lower[0]].units['ne'] == '10$^{18}$m$^{-3}$' and data_lower[index_lower[0]].units['Te'] == 'eV':
         ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper = [], [], [], [], [], []
-        for i in range(len(data_lower)):
+        for i in index_lower:
             #ne_lower.append(list(data_lower[i].ne)) 
             
-            #filter out measurements that are nonexisting
+            #filter out measurements that are nonexisting (file exists but fake measurement value for t = 0 is inserted)
             filter_lower = np.array([j == 0 for j in data_lower[i].time])
-            filter_upper = np.array([j == 0 for j in data_upper[i].time])
 
             ne_lower.append(list(np.array(data_lower[i].ne)[~filter_lower]))
-            ne_upper.append(list(np.array(data_upper[i].ne)[~filter_upper]))
             Te_lower.append(list(np.array(data_lower[i].Te)[~filter_lower]))
-            Te_upper.append(list(np.array(data_upper[i].Te)[~filter_upper]))
             t_lower.append(list(np.array(data_lower[i].time)[~filter_lower]))
+        
+        for i in index_upper:
+            #ne_lower.append(list(data_lower[i].ne)) 
+            
+            #filter out measurements that are nonexisting (file exists but fake measurement value for t = 0 is inserted)
+            filter_upper = np.array([j == 0 for j in data_upper[i].time])
+
+            ne_upper.append(list(np.array(data_upper[i].ne)[~filter_upper]))
+            Te_upper.append(list(np.array(data_upper[i].Te)[~filter_upper]))
             t_upper.append(list(np.array(data_upper[i].time)[~filter_upper]))
         
         #careful, not all subarrays have the same shape, len(Te_upper[0]) == len(ne_upper[0]), but not neccessarily len(Te_upper[0]) == len(Te_upper[1])
-        return ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper
+        return ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper, index_lower, index_upper
     else:
         return 'wrong units'
 
 #######################################################################################################################################################################
 def readMarkusData(settings_dict, interval, settings_Gao):
+    ''' returns electron temperature Te in [eV] and electron density ne in [1/m^3] plus corresponding mesurement times in [s] of langmuir probes
+        returns surface temperature of divertor in [°C] at position closest to langmuir probes plus corresponding  relative to pumping gap in [m] and measurement time in [s]
+        returns arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
+        reads and processes data from downloaded files under path, interval determines how many time frames are averaged'''
     #get n_e data from Langmuir Probes
     ne_path = os.path.join('inputFiles/Daten_LP', settings_dict['exp'], '{c}_{q}_{tw}_{m}_{s}.npz'.format(c=settings_dict['c'], q='ne', tw=settings_dict['tw'], m=settings_dict['m'], s=settings_dict['s']))
     time, positions, ne_values = dict(np.load(ne_path,allow_pickle=True)).values() #n_e_values is 2dimensional with lines representing positions and columns the times
@@ -101,7 +144,7 @@ def readMarkusData(settings_dict, interval, settings_Gao):
     Te_path = os.path.join('inputFiles/Daten_LP', settings_dict['exp'], '{c}_{q}_{tw}_{m}_{s}.npz'.format(c=settings_dict['c'], q='varianceTe', tw=settings_dict['tw'], m=settings_dict['m'], s=settings_dict['s']))
     time_var, positions_var, Te_values_var = dict(np.load(Te_path,allow_pickle=True)).values()
 
-    #convert n_e and its variances in 1/m^3, positions and their variances in m
+    #convert n_e and its variances in [1/m^3], positions and their variances in [m]
     ne_values = ne_values * 1e18
     ne_values_var = ne_values_var * 1e18
     positions = positions * 1e-3
@@ -119,7 +162,7 @@ def readMarkusData(settings_dict, interval, settings_Gao):
     ne_values[np.where(ne_values > ne_limit)] = np.nan
     Te_values[np.where(Te_values > Te_limit)] = np.nan
 
-    #if interval = 50 values are averaged, intervalNumber averages are determined
+    #if interval = 50, 50 values are averaged, intervalNumber averages are determined
     intervalNumber = time.shape[0]//interval
 
     #creates intervalNumber arrays with approx. the same number of entries and subsequent times -> e.g. for n_e of shape 5, 100 and intervalNumber=10, 10 arrays are created with shape 5, 10 where the 10 times are adjacent for one block
@@ -175,14 +218,14 @@ def readMarkusData(settings_dict, interval, settings_Gao):
     ne_values_var=np.transpose(ne_values_var)
     Te_values_var=np.transpose(Te_values_var)
 
-    #read Gao's data
+    #read Gao's data for surface temperature
     #lines represent one time each, columns are positions in data? S corresponds to position
     Gao_path_data = os.path.join('inputFiles/Daten von Gao/{exp}_{discharge}_{divertor}_{l}_{finger}/data.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger']))
     Gao_path_t = os.path.join('inputFiles/Daten von Gao/{exp}_{discharge}_{divertor}_{l}_{finger}/t.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger']))
     Gao_path_S = os.path.join('inputFiles/Daten von Gao/{exp}_{discharge}_{divertor}_{l}_{finger}/S.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger']))
     Gao_path_data_PF = os.path.join('inputFiles/Daten von Gao PF/{exp}_{discharge}_{divertor}_{l}_{finger}_{PF}/data_PF.txt'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertor=settings_Gao['divertor'], l='l', finger=settings_Gao['finger'], PF='PF'))
 
-    #read out data for temperatures in [°C]?
+    #read out data for temperatures in [°C]
     data_Ts1= open(Gao_path_data, 'r').readlines()
     data_Ts = []
     for line in data_Ts1:
@@ -264,7 +307,7 @@ def readMarkusData(settings_dict, interval, settings_Gao):
             pass
         else:
             list_delete.append(i)
-    #deletes the data(S, Ts, PF(plasmaflux)) of yu, that was measured at positions to far from lukas positions -> different axis due to shapes of arrays
+    #deletes the data(S, Ts, PF(plasmaflux)) of yu, that was measured at positions too far from lukas positions -> different axis due to shapes of arrays
     S = np.delete(S, list_delete, axis=0)
     data_Ts = np.delete(data_Ts, list_delete, axis=1)
     data_PF = np.delete(data_PF, list_delete, axis=1)
@@ -274,6 +317,7 @@ def readMarkusData(settings_dict, interval, settings_Gao):
 
 #######################################################################################################################################################################
 def readArchieveDB():
+    '''just example for using J. Brunners package w7xarchive to read data from ArchiveDB'''
     shotnumbersOP1 = ['20181018.041']
     shotnumbersOP2 = ['20250424.050']
 
