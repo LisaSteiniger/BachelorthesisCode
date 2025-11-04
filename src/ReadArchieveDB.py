@@ -6,8 +6,66 @@ import os
 import w7xarchive   #see https://git.ipp-hgw.mpg.de/kjbrunne/w7xarchive/-/blob/master/doc/workshop.ipynb for introduction
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from src.dlp_data import extract_divertor_probe_data as extract
 from src.heatflux_T import heatflux_T_download
+
+#######################################################################################################################################################################
+def readAllShotNumbersFromJuice(juicePath, safe='results/dischargeIDlistAll.csv'):   
+    ''' if no file is saved under "safe", function reads the IDs of all discharges carried out in campaign(s) for which juice file(s) are given under "juicePath" and saves them as .csv file under "safe"
+        if such a file is existent, the discharge IDs are read from it and returned
+        returned object is identical in both cases: dictionary object with 'dischargeID' key holding list of strings reprensenting all discharge IDs'''
+    if os.path.isfile(safe):
+        return pd.read_csv(safe, sep=';')
+    
+    else:
+        files = []
+        for i in range(len(juicePath)):
+            files.append(pd.read_csv(juicePath[i],  index_col=0))
+        juice = pd.concat(files)
+
+        dischargeIDlist = list(np.unique(juice['shot']))
+        configurations = []
+        durations = []
+        discharges = []
+        for discharge in dischargeIDlist:
+            shot = juice[juice['shot']==discharge]
+            print(shot.head()['configuration'])
+            discharges.append(list(shot['shot'])[0])
+            configurations.append(list(shot['configuration'])[0])
+            durations.append(list(shot['t_shot_stop'])[0])
+
+        dischargeIDcsv = pd.DataFrame({'dischargeID':dischargeIDlist, 'configuration':configurations, 'duration':durations})
+        dischargeIDcsv.to_csv(safe, sep=';')
+        return dischargeIDcsv
+
+#######################################################################################################################################################################
+def getRuntimePerConfiguration(dischargeIDcsv, safe='results/configurationRuntimes.csv'):
+    ''' This function determines the absolute and relative runtime of each configuration over all discharges given by "dischargeIDcsv" and writes them as .csv file to safe'''
+    configurations = list(np.unique(dischargeIDcsv['configuration']))
+    configurations = list(np.unique([x[:4] for x in configurations]))
+    #print(configurations)
+
+    runtimes = pd.DataFrame({})
+    absoluteRuntimes, relativeRuntimes = [], []
+    totalRuntime = sum(dischargeIDcsv['duration'])
+
+    for configuration in configurations:
+        filter = np.array([i.startswith(configuration) for i in dischargeIDcsv['configuration']])
+        runtime = sum(dischargeIDcsv[filter]['duration'])
+        absoluteRuntimes.append(runtime)
+        relativeRuntimes.append(runtime/totalRuntime * 100)
+
+    configurations.append('all')
+    absoluteRuntimes.append(totalRuntime)
+    relativeRuntimes.append(100)
+
+    runtimes['configuration'] = configurations
+    runtimes['absolute runtime (s)'] = absoluteRuntimes
+    runtimes['relative runtime (%)'] = relativeRuntimes
+    runtimes = runtimes.sort_values('absolute runtime (s)')
+
+    runtimes.to_csv(safe, sep=';')
 
 #######################################################################################################################################################################
 def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_position, index_divertorUnit):
@@ -39,8 +97,50 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_
             exit
 
         for time in times:
+            ########################new2########################
+            port = 'AEF50'
+            archiveComp = ['Test', 'raw', 'W7XAnalysis', 'QRT_IRCAM_new']
+
+            #test if any data is available for the discharge at any time
+            time_from, time_to = w7xarchive.get_program_from_to(dischargeID)            
+            signal_name = np.append(archiveComp, port + '_meanHF_TMs_DATASTREAM')
+            normed_signal = w7xarchive.get_base_address(signal_name)
+            url = w7xarchive.get_base_address(normed_signal)
+            versioned_signal, url_tail = w7xarchive.get_stream_address(url)
+            highest_version = w7xarchive.get_last_version(versioned_signal, time_from, time_to)
+            if highest_version is None:
+                print('No IRcam stream for any time in discharge {dischargeID}')
+                return 'No IRcam stream for any time in discharge {dischargeID}'
+            #########################new2########################
+
             test = heatflux_T_download.heatflux_T_process(dischargeID, camera)
             pulse_duration = test.availtimes[-1] - 1
+            ########################new########################
+            #test if any data is available for the discharge time interval
+            port = 'AEF50'
+            archiveComp = ['Test', 'raw', 'W7XAnalysis', 'QRT_IRCAM_new']
+            stream_channel_name = port + '_temperature_tar_baf_DATASTREAM'
+            t1 = w7xarchive.get_program_t1(dischargeID)
+            tsstamp = t1 + int(time * 1e9)
+            testamp = t1 + int((time + 0.01) * 1e9)
+            signal_name, time_from, time_to = np.hstack([archiveComp, stream_channel_name, '0', stream_channel_name]), max(0, tsstamp), min(test.availtimes[-1], testamp)
+
+            # since we cannot be 100% certain that this function is always
+            # called preceeded by get_base_address,
+            # we call it again in here (shouldn't have a significant performance hit).
+            url = w7xarchive.get_base_address(signal_name)
+
+            # split stream and rest in the url
+            versioned_signal, url_tail = w7xarchive.get_stream_address(url)
+            #version_str = w7xarchive.helpers.get_version_from_url(url)
+
+            # grab the latest available version
+            highest_version = w7xarchive.get_last_version(versioned_signal, int(time_from), int(time_to))
+
+            if highest_version is None:
+                print('No IRcam stream available for discharge {dischargeID} in interval')
+                return 'No IRcam stream available for discharge {dischargeID} in interval'
+            ########################new########################
 
             if time + 0.01 > pulse_duration: #if no frames are present for the time interval
                 T_data_dt = [0] * len(LP_indices)
@@ -67,7 +167,7 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_
         T_data.append(T_data_divertor)
 
     if len(T_data) == 2:    
-        return np.array(T_data[0]).T, np.array(T_data[1]).T
+        return [np.array(T_data[0]).T, np.array(T_data[1]).T]
     else:
         return np.array(T_data[0]).T
     
@@ -78,6 +178,18 @@ def readLangmuirProbeDataFromXdrive(dischargeID):
         if 8 files are not found, that is ok -> they are at TM8h and only exist for high iota discharges
         if files are missing, index_upper and index_lower provide the indices for the active probes
         LPs are numbered as follows: TM2h07 holds probe 0 to 5, TM3h01 6 to 13, TM8h01 14 to 17 -> index_divertorUnits applies same scheme'''
+    ########################new########################
+    #'''
+    xdrive_directory = "//x-drive/Diagnostic-logbooks/QRP-LangmuirProbes/QRP02-Divertor Langmuir Probes/Analysis/OP2/"
+    directory = f"{xdrive_directory}/{dischargeID}/"
+    #file = directory + f"{dischargeID}_probe_{probename}.txt"
+    pathLP = directory
+    print(pathLP)
+    if not os.path.exists(pathLP):
+        print('No LP data available')
+        return 'No LP data available'
+    #'''
+    ########################new########################
     #internal naming of probes in xdrive
     probes_lower = [50201, 50203, 50205, 50207, 50209, 50211,  50218, 50220, 50222, 50224, 50226, 50228, 50230, 50232, 50246, 50248, 50249, 50251]
     probes_upper = [51201, 51203, 51205, 51207, 51209, 51211,  51218, 51220, 51222, 51224, 51226, 51228, 51230, 51232, 51246, 51248, 51249, 51251]
@@ -96,7 +208,14 @@ def readLangmuirProbeDataFromXdrive(dischargeID):
         index_upper.remove(probes_upper.index(fail))
 
     #test units as program needs those units to calculate correctly 
-    if data_lower[index_lower[0]].units['time'] == 's' and data_lower[index_lower[0]].units['ne'] == '10$^{18}$m$^{-3}$' and data_lower[index_lower[0]].units['Te'] == 'eV':
+    if len(index_lower) != 0:
+        test_index = index_lower
+    elif len(index_upper) != 0:
+        test_index = index_upper
+    else:
+        return 'No LP data available'
+
+    if data_lower[test_index[0]].units['time'] == 's' and data_lower[test_index[0]].units['ne'] == '10$^{18}$m$^{-3}$' and data_lower[test_index[0]].units['Te'] == 'eV':
         ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper = [], [], [], [], [], []
         for i in index_lower:
             #ne_lower.append(list(data_lower[i].ne)) 
@@ -104,7 +223,7 @@ def readLangmuirProbeDataFromXdrive(dischargeID):
             #filter out measurements that are nonexisting (file exists but fake measurement value for t = 0 is inserted)
             filter_lower = np.array([j == 0 for j in data_lower[i].time])
 
-            ne_lower.append(list(np.array(data_lower[i].ne)[~filter_lower]))
+            ne_lower.append(list(np.array(data_lower[i].ne)[~filter_lower]*1e+18))  #values are given as ne [1e+18 1/m^3]
             Te_lower.append(list(np.array(data_lower[i].Te)[~filter_lower]))
             t_lower.append(list(np.array(data_lower[i].time)[~filter_lower]))
         
@@ -114,12 +233,12 @@ def readLangmuirProbeDataFromXdrive(dischargeID):
             #filter out measurements that are nonexisting (file exists but fake measurement value for t = 0 is inserted)
             filter_upper = np.array([j == 0 for j in data_upper[i].time])
 
-            ne_upper.append(list(np.array(data_upper[i].ne)[~filter_upper]))
+            ne_upper.append(list(np.array(data_upper[i].ne)[~filter_upper]*1e+18))  #values are given as ne [1e+18 1/m^3]
             Te_upper.append(list(np.array(data_upper[i].Te)[~filter_upper]))
             t_upper.append(list(np.array(data_upper[i].time)[~filter_upper]))
         
         #careful, not all subarrays have the same shape, len(Te_upper[0]) == len(ne_upper[0]), but not neccessarily len(Te_upper[0]) == len(Te_upper[1])
-        return ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper, index_lower, index_upper
+        return [ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper, index_lower, index_upper]
     else:
         return 'wrong units'
 

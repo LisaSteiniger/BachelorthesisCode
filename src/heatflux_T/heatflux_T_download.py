@@ -438,7 +438,6 @@ class heatflux_T_process (cal_constants):
         if AverageNearby is not None:
             middle_line_index = len(stacklineNO) // 2
             middle_S = self.stackS[middle_line_index]
-            
             # to avoid negative index
             start_line_index = middle_line_index - AverageNearby
             if start_line_index < 0:
@@ -453,11 +452,14 @@ class heatflux_T_process (cal_constants):
             for dataall in datasall:
                 interpdata_all = []
                 for S, data in list(zip(Sall, dataall)): 
+                    #print(type(data), np.shape(np.array(data)), data)
+                    #print(type(middle_S), np.shape(np.array(middle_S)), middle_S)
+                    #print(type(S), np.shape(np.array(S)), S)
                     if S[0] > S[1]:
                         # decreasing order need reverse before interpolation.
-                        interpdata_all.append(np.interp(middle_S, S[::-1], data[::-1]))
+                        interpdata_all.append(np.interp(np.array(middle_S).astype(np.float64), np.array(S[::-1]).astype(np.float), np.array(data[::-1]).astype(np.float)))
                     else:
-                        interpdata_all.append(np.interp(middle_S, S, data))
+                        interpdata_all.append(np.interp(np.array(middle_S).astype(np.float64), np.array(S).astype(np.float64), np.array(data).astype(np.float64)))
 
                 interpdata_all = np.mean(interpdata_all, axis = 0)
                 interpdatas_all.append(interpdata_all)                        

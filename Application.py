@@ -62,8 +62,24 @@ lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
 #incident angle in rad
 alpha = 2 * np.pi/9
 
+#juice files saved under followig paths for OP2.2/2.3
+juicePath = [r"\\share\groups\E3\Diagnostik\DIA-3\QRH_PWI\experiment_analysis\BA Lisa Steiniger\Programmes\PythonScript_LisaSteiniger\BachelorthesisCode\inputFiles\Juice\adb_juice_op22_step_0.2_v0.5_redux.csv",
+             r"\\share\groups\E3\Diagnostik\DIA-3\QRH_PWI\experiment_analysis\BA Lisa Steiniger\Programmes\PythonScript_LisaSteiniger\BachelorthesisCode\inputFiles\Juice\adb_juice_op23_step_0.2_v0.6_redux.csv"]
+
 #dischargeID
-discharge = '20250304.086'   #20241127.034'
+discharges = read.readAllShotNumbersFromJuice(juicePath) #samples all discharge IDs from juice files under "juicePath", their configuration and duration, rerurned as dictoinary with keys 'dischargeID', 'configuration', 'duration'
+dischargeIDs = discharges['dischargeID']
+
+#dischargeIDs = ['W7X20241022.045']#20250304.086']#W7X20241022.046']   #20241127.034' #manually
+
+#reality check
+#ne, Te, Ts, Ts2, timesteps = np.array([23.02 * 1e+18]), np.array([13.26]), np.array([344.6079519215609]), np.array([344.6079519215609 + 600]), np.array([2])
+#Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = process.calculateErosionRelatedQuantitiesOnePosition(Te, Te, Ts, ne, timesteps, alpha, m_i, f_i, ions, k, n_target)
+#print(Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness)
+#Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = process.calculateErosionRelatedQuantitiesOnePosition(Te, Te, Ts2, ne, timesteps, alpha, m_i, f_i, ions, k, n_target)
+#print(Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness)
+
+run = True
 
 #######################################################################################################################################################################
 #######################################################################################################################################################################
@@ -73,8 +89,14 @@ discharge = '20250304.086'   #20241127.034'
 
 #######################################################################################################################################################################
 #PROGRAM CODE FOR OP2 DISCHARGE GIVEN AS "DISCHARGE"
+if not run:
+    exit()
+
 if __name__ == '__main__':
     #_lower indicates lower divertor unit, _upper upper divertor unit
+
+    #configuration percentages of total runtime in OP2.2/2.3
+    #read.getRuntimePerConfiguration(discharges)
 
     #read langmuir probe positions in [m] from pumping gap
     #index 0 - 5 are langmuir probes on TM2h, 6 - 13 on TM3h, 14 - 17 on TM8h (distance from pumping gap is increasing)
@@ -83,54 +105,69 @@ if __name__ == '__main__':
     LP_position.append(OP2_TM8Distances)
     LP_position = list(itertools.chain.from_iterable(LP_position)) #flattens to 1D list
 
-    #read Langmuir Probe data from xdrive
-    #all arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
-    #ne in [1/m^3], Te in [eV] and assumption that Te=Ti, t in [s]
-    #index represent the active LPs on each divertor unit
-    ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper, index_lower, index_upper = read.readLangmuirProbeDataFromXdrive(discharge)
+    not_workingLP, not_workingIR = [], []
+    for counter, discharge in enumerate(dischargeIDs[:]):
+        #cut 'W7X' in front of the discharge ID
+        discharge = discharge[3:]
+        print(not_workingLP, not_workingIR)
 
-    #all Langmuir Probes measure at the same times but some will stop earlier than others 
-    #-> time_array holds all times that are represented in one discharge at any LP
-    time_array = []
-    for t_divertorUnit in [t_lower, t_upper]:
-        for t_position in t_divertorUnit:
-            for t in t_position:
-                if t not in time_array:
-                    time_array.append(t)
-    time_array.sort()
-    #print(time_array)
-    
-    #read IRcam data for both divertor units
-    #index represent the active LPs on each divertor unit
-    #Ts in [K], LP_position in [m] from pumping gap, time_array in [s]
-    Ts_lower, Ts_upper = read.readSurfaceTemperatureFramesFromIRcam(discharge, time_array, ['lower', 'upper'], LP_position, [index_lower, index_upper])
-    
-    #missing measurement times and values are replaced by adding arrays of 0 to guarantee same data structure of all arrays concerning t, Te, Ts, ne
-    for j in range(len(ne_lower)):
-        for i in range(len(time_array) - len(ne_lower[j])):
-            ne_lower[j].append(0)
-            Te_lower[j].append(0)
-            t_lower[j].append(0)
-    for j in range(len(ne_upper)):
-        for i in range(len(time_array) - len(ne_upper[j])):
-            ne_upper[j].append(0)
-            Te_upper[j].append(0)
-            t_upper[j].append(0)
+        #read Langmuir Probe data from xdrive
+        #all arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
+        #ne in [1/m^3], Te in [eV] and assumption that Te=Ti, t in [s]
+        #index represent the active LPs on each divertor unit
+        return_LP = read.readLangmuirProbeDataFromXdrive(discharge)
+        if type(return_LP) == str:
+            not_workingLP.append([discharge, counter])
+            continue
+        
+        ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper, index_lower, index_upper = return_LP
 
-    Te_lower = np.array(Te_lower)
-    Te_upper = np.array(Te_upper)
-    ne_lower = np.array(ne_lower)
-    ne_upper = np.array(ne_upper)
-    t_lower = np.array(t_lower)
-    t_upper = np.array(t_upper)
-    #print(np.shape(Ts_lower), np.shape(Ts_upper), np.shape(ne_upper), np.shape(ne_lower), np.shape(Te_upper), np.shape(Te_lower))
+        #all Langmuir Probes measure at the same times but some will stop earlier than others 
+        #-> time_array holds all times that are represented in one discharge at any LP
+        time_array = []
+        for t_divertorUnit in [t_lower, t_upper]:
+            for t_position in t_divertorUnit:
+                for t in t_position:
+                    if t not in time_array:
+                        time_array.append(t)
+        time_array.sort()
+        #print(time_array)
+        
+        #read IRcam data for both divertor units
+        #index represent the active LPs on each divertor unit
+        #Ts in [K], LP_position in [m] from pumping gap, time_array in [s]
+        return_IR = read.readSurfaceTemperatureFramesFromIRcam(discharge, time_array, ['lower', 'upper'], LP_position, [index_lower, index_upper])
+        if type(return_IR) == str:
+            not_workingIR.append([discharge, counter])
+            continue
+        Ts_lower, Ts_upper = return_IR
+        
+        #missing measurement times and values are replaced by adding arrays of 0 to guarantee same data structure of all arrays concerning t, Te, Ts, ne
+        for j in range(len(ne_lower)):
+            for i in range(len(time_array) - len(ne_lower[j])):
+                ne_lower[j].append(0)
+                Te_lower[j].append(0)
+                t_lower[j].append(0)
+        for j in range(len(ne_upper)):
+            for i in range(len(time_array) - len(ne_upper[j])):
+                ne_upper[j].append(0)
+                Te_upper[j].append(0)
+                t_upper[j].append(0)
 
-    #calculate sputtering related physical quantities (sputtering yields, erosion rates, layer thicknesses)
-    #all arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
-    #ne in [1/m^3], Te in [eV] and assumption that Te=Ti, t in [s], Ts in [K], alpha in [rad], LP_position in [m] from pumping gap, m in [kg], k in [eV/K], n_target in [1/m^3]
-    #does not return something but writes measurement values and calculated values to 'results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)
-    #plots are saved in safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=divertorUnit, position=position)
-    process.processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, True)
+        Te_lower = np.array(Te_lower)
+        Te_upper = np.array(Te_upper)
+        ne_lower = np.array(ne_lower)
+        ne_upper = np.array(ne_upper)
+        t_lower = np.array(t_lower)
+        t_upper = np.array(t_upper)
+        #print(np.shape(Ts_lower), np.shape(Ts_upper), np.shape(ne_upper), np.shape(ne_lower), np.shape(Te_upper), np.shape(Te_lower))
+
+        #calculate sputtering related physical quantities (sputtering yields, erosion rates, layer thicknesses)
+        #all arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
+        #ne in [1/m^3], Te in [eV] and assumption that Te=Ti, t in [s], Ts in [K], alpha in [rad], LP_position in [m] from pumping gap, m in [kg], k in [eV/K], n_target in [1/m^3]
+        #does not return something but writes measurement values and calculated values to 'results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)
+        #plots are saved in safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=divertorUnit, position=position)
+        process.processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, True)
 
 #Warning from GitBash when heatflux code was added: LF will be replaced by CRLF the next time Git touches it
 #######################################################################################################################################################################

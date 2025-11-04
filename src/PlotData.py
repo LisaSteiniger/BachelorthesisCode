@@ -17,7 +17,7 @@ def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickn
     fig, ax = plt.subplots(3, 1, layout='constrained', figsize=(10, 12), sharex=True)
     
     #first subplot for measurement values
-    ax[0].plot(np.array(dt)[filter], np.array(n_e)[filter], '-x', label='$n_e$')
+    ax[0].plot(np.array(dt)[filter], np.array(n_e)[filter]*1e-18, '-x', label='$n_e$')
     ax[0].plot(np.array(dt)[filter], np.array(T_e)[filter], '-x', label='$T_e$')
     ax[0].plot(np.array(dt)[filter], np.array(T_s)[filter], '-x', label='$T_s$')
     
@@ -39,7 +39,7 @@ def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickn
     #ax[1].set_xlabel('Time t from start of the discharge (s)')
     ax[2].set_xlabel('Time t from start of the discharge (s)')
 
-    ax[0].set_ylabel('Plasma density $n_e$ (x 1e19 1/m$^3$)\nElectron temperature $T_e$ (eV)\nSurface temperature $T_s$ (K)')
+    ax[0].set_ylabel('Plasma density $n_e$ (x 1e18 1/m$^3$)\nElectron temperature $T_e$ (eV)\nSurface temperature $T_s$ (K)')
     ax[1].set_ylabel('Sputtering yields Y')
     ax[2].set_ylabel('\nErosion rate $\Delta_{ero}/t$ (nm/s)\nTotal eroded layer thickness  $\Delta_{ero}$ (nm)')
     

@@ -1,9 +1,9 @@
-#This file contains the positions of the Langmuir Probes  for OP1.2 and OP.2. 
-#They are given as the distance in meters from the pumping gap.
-#In OP1.2 they are located in divertor module 5 on the horizontal target elements 3 and 4 of upper and lower divertor unit 
-#In OP2 they are located in divertor module 5 on the horizontal target modules 2h07, 3h01, and 8h01 of upper and lower divertor unit
-#Found in   https://wikis.ipp-hgw.mpg.de/W7X/index.php/QRP_-_Langmuir_Probe_Array_(Divertor),_OP1_flush_mounted,_OP2_pop-up
-#           https://w7x-logbook.ipp-hgw.mpg.de/components?id=QRP02#
+''' This file contains the positions of the Langmuir Probes  for OP1.2 and OP.2. 
+    They are given as the distance in meters from the pumping gap.
+    In OP1.2 they are located in divertor module 5 on the horizontal target elements 3 and 4 of upper and lower divertor unit 
+    In OP2 they are located in divertor module 5 on the horizontal target modules 2h07, 3h01, and 8h01 of upper and lower divertor unit
+    Found in   https://wikis.ipp-hgw.mpg.de/W7X/index.php/QRP_-_Langmuir_Probe_Array_(Divertor),_OP1_flush_mounted,_OP2_pop-up
+               https://w7x-logbook.ipp-hgw.mpg.de/components?id=QRP02#'''
 
 OP1_ProbeTM3 = ['TE3-01', 'TE3-02', 'TE3-03', 'TE3-04', 'TE3-05', 'TE3-06', 'TE3-07', 'TE3-08', 'TE3-09', 'TE3-10']
 OP1_ProbeTM4 = ['TE4-11', 'TE4-12', 'TE4-13', 'TE4-14', 'TE4-15', 'TE4-16', 'TE4-17', 'TE4-18', 'TE4-19', 'TE4-20']
