@@ -96,26 +96,32 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_
             print('Undefined divertor Unit')
             exit
 
+        port = camera
+        archiveComp = ['Test', 'raw', 'W7XAnalysis', 'QRT_IRCAM_new']
+
+        #test if any data is available for the discharge at any time
+        time_from, time_to = w7xarchive.get_program_from_to(dischargeID)            
+        signal_name = np.append(archiveComp, port + '_meanHF_TMs_DATASTREAM')
+        normed_signal = w7xarchive.get_base_address(signal_name)
+        url = w7xarchive.get_base_address(normed_signal)
+        versioned_signal, url_tail = w7xarchive.get_stream_address(url)
+        highest_version = w7xarchive.get_last_version(versioned_signal, time_from, time_to)
+        if highest_version is None:
+            print('No IRcam stream for any time in discharge')
+            return 'No IRcam stream for any time in discharge'
+
+        #test for number of triggers, discard discharges with less/more than one trigger
+        prog = w7xarchive.get_program_info(dischargeID)
+        if (prog["trigger"] is None) or len(prog["trigger"]['1']) < 1:
+            print(f'The program {dischargeID} has no trigger {"1"}')
+            return f'The program {dischargeID} has no trigger {"1"}'
+        elif len(prog["trigger"]['1']) > 1:
+            print(f'The program {dischargeID} has more than one trigger {"1"}')
+            return f'The program {dischargeID} has more than one trigger {"1"}'
+        
         for time in times:
-            ########################new2########################
-            port = 'AEF50'
-            archiveComp = ['Test', 'raw', 'W7XAnalysis', 'QRT_IRCAM_new']
-
-            #test if any data is available for the discharge at any time
-            time_from, time_to = w7xarchive.get_program_from_to(dischargeID)            
-            signal_name = np.append(archiveComp, port + '_meanHF_TMs_DATASTREAM')
-            normed_signal = w7xarchive.get_base_address(signal_name)
-            url = w7xarchive.get_base_address(normed_signal)
-            versioned_signal, url_tail = w7xarchive.get_stream_address(url)
-            highest_version = w7xarchive.get_last_version(versioned_signal, time_from, time_to)
-            if highest_version is None:
-                print('No IRcam stream for any time in discharge {dischargeID}')
-                return 'No IRcam stream for any time in discharge {dischargeID}'
-            #########################new2########################
-
             test = heatflux_T_download.heatflux_T_process(dischargeID, camera)
             pulse_duration = test.availtimes[-1] - 1
-            ########################new########################
             #test if any data is available for the discharge time interval
             port = 'AEF50'
             archiveComp = ['Test', 'raw', 'W7XAnalysis', 'QRT_IRCAM_new']
@@ -139,30 +145,31 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_
 
             if highest_version is None:
                 print('No IRcam stream available for discharge {dischargeID} in interval')
-                return 'No IRcam stream available for discharge {dischargeID} in interval'
-            ########################new########################
-
-            if time + 0.01 > pulse_duration: #if no frames are present for the time interval
-                T_data_dt = [0] * len(LP_indices)
+                T_data_dt = [0] * len(LP_indices) #no values are present
+                #continue #jump to next time 
+                #return 'No IRcam stream available for discharge {dischargeID} in interval'
             else:
-                test.get_Frames(time,  time + 0.1, T = True) #get frame for whole divertor unit in certain time interval
-                T_data_dt = []
+                if time + 0.01 > pulse_duration: #if no frames are present for the time interval
+                    T_data_dt = [0] * len(LP_indices)
+                else:
+                    test.get_Frames(time,  time + 0.1, T = True) #get frame for whole divertor unit in certain time interval
+                    T_data_dt = []
 
-                for LP_index in LP_indices:
-                    if LP_index < 6:
-                        targetElement = 'TM2h_06'
-                    elif LP_index < 14:
-                        targetElement = 'TM3h_02'
-                    else:
-                        targetElement = 'TM8h_01'    
+                    for LP_index in LP_indices:
+                        if LP_index < 6:
+                            targetElement = 'TM2h_06'
+                        elif LP_index < 14:
+                            targetElement = 'TM3h_02'
+                        else:
+                            targetElement = 'TM8h_01'    
 
-                    test.get_Profiles(targetElement, AverageNearby=1000) #get data for one target element
-                    distance = test.stackS.tolist() #distance from pumping gap in [m] for all measured positions on the target element
+                        test.get_Profiles(targetElement, AverageNearby=1000) #get data for one target element
+                        distance = test.stackS.tolist() #distance from pumping gap in [m] for all measured positions on the target element
 
-                    closestIndex = distance.index(min(distance, key=lambda x: abs(x - LP_position[LP_index])))  #find measurement position of T that is closest to langmuir probe
-                    #print(distance[closestIndex])
-                    T_data_dt.append(test.datas.T[closestIndex][0] + 273.15)   #conversion from degrees C to K 
-            
+                        closestIndex = distance.index(min(distance, key=lambda x: abs(x - LP_position[LP_index])))  #find measurement position of T that is closest to langmuir probe
+                        #print(distance[closestIndex])
+                        T_data_dt.append(test.datas.T[closestIndex][0] + 273.15)   #conversion from degrees C to K 
+                
             T_data_divertor.append(T_data_dt)
         T_data.append(T_data_divertor)
 

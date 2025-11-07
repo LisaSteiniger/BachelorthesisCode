@@ -295,28 +295,30 @@ def energyDistributionIons(E=2, T_i=1, q=1):
 #E and T_i in [eV], T_s in [K], flux in [ions/(s m^2)]
 def calculateTotalErosionYield(incidentParticle, T_i, targetMaterial='C', alpha=np.pi/4, T_s=600, flux=1e22):
     #as all ion energies should be considered but with appropriate weighting factor, integral (over all applying energies) of erosion yield times energy distribution is chosen
-    if incidentParticle=="C":
-        q_i = 2
-    elif incidentParticle=="O":
-        q_i = 3
-    else:
-        q_i = 1
-    def Integral(incidentParticle, E, T_i, targetMaterial='C', alpha=np.pi/4, T_s=600, flux=1e22):
-        if incidentParticle=="H":
-            Y = calculatePhysicalSputteringYield(targetMaterial, 'H', E, alpha) + calculateChemicalErosionYieldRoth('H', E, T_s, flux)#+ calculateChemicalErosionYield('H', E, T_s, flux)
-        elif incidentParticle=="D":
-            Y = calculatePhysicalSputteringYield(targetMaterial, 'D', E, alpha) + calculateChemicalErosionYieldRoth('D', E, T_s, flux)
-        elif incidentParticle=="T":
-            Y = calculatePhysicalSputteringYield(targetMaterial, 'T', E, alpha) + calculateChemicalErosionYieldRoth('T', E, T_s, flux)
+    if T_s != 0:
+        if incidentParticle=="C":
+            q_i = 2
         elif incidentParticle=="O":
-            Y = calculatePhysicalSputteringYield(targetMaterial, 'O', E, alpha) + 0.7 #0.7 is literature value for chem erosion of O on C
-        elif incidentParticle=="C":
-            Y = calculatePhysicalSputteringYieldEckstein(E, alpha)   
-        return energyDistributionIons(E, T_i, q_i) * Y
-    IntegralFunction = lambda E: Integral(incidentParticle, E, T_i, targetMaterial, alpha, T_s, flux)
-    IntegralResult = integrate.quad(IntegralFunction, 3 * T_i * q_i, np.inf)
-
-    return IntegralResult[0]
+            q_i = 3
+        else:
+            q_i = 1
+        def Integral(incidentParticle, E, T_i, targetMaterial='C', alpha=np.pi/4, T_s=600, flux=1e22):
+            if incidentParticle=="H":
+                Y = calculatePhysicalSputteringYield(targetMaterial, 'H', E, alpha) + calculateChemicalErosionYieldRoth('H', E, T_s, flux)#+ calculateChemicalErosionYield('H', E, T_s, flux)
+            elif incidentParticle=="D":
+                Y = calculatePhysicalSputteringYield(targetMaterial, 'D', E, alpha) + calculateChemicalErosionYieldRoth('D', E, T_s, flux)
+            elif incidentParticle=="T":
+                Y = calculatePhysicalSputteringYield(targetMaterial, 'T', E, alpha) + calculateChemicalErosionYieldRoth('T', E, T_s, flux)
+            elif incidentParticle=="O":
+                Y = calculatePhysicalSputteringYield(targetMaterial, 'O', E, alpha) + 0.7 #0.7 is literature value for chem erosion of O on C
+            elif incidentParticle=="C":
+                Y = calculatePhysicalSputteringYieldEckstein(E, alpha)   
+            return energyDistributionIons(E, T_i, q_i) * Y
+        IntegralFunction = lambda E: Integral(incidentParticle, E, T_i, targetMaterial, alpha, T_s, flux)
+        IntegralResult = integrate.quad(IntegralFunction, 3 * T_i * q_i, np.inf)
+        return IntegralResult[0]
+    else:
+        return 0
 
 #######################################################################################################################################################################
 #Calculation of Fluxes of Incident Ions and Eroded Particles, and Thickness of Eroded Layer according to Ref. 1

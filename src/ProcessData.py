@@ -169,7 +169,7 @@ def calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, dt, alpha, 
     ''' returns suttering yields for hydrogen, deuterium, tritium, carbon and oxygen on carbon targets, the combined erosion rates and layer thicknesses for all time steps at one position
         _values arrays are 1 dimensional the time steps at one position, e.g _values[0] being the value at position 1 at time step 1
         ne in [1/m^3], Te and Ti in [eV], dt are time steps (duration) in [s], Ts in [K], alpha in [rad], m in [kg], f being concentrtions of ions, k in [eV/K], n_target in [1/m^3]'''
-    
+
     if len(T_i) == len(T_s) and len(T_i) == len(n_e) and len(T_i) == len(dt): #otherwise code won't run
         #calculate fluxes for all ion species [H, D, T, C, O] at each single time step (number of time steps = len(dt))
         fluxes = []
@@ -215,13 +215,13 @@ def calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, dt, alpha, 
         #print('Total erosion layer thickness over all x time steps:\n {erodedLayerThickness}'.format(erodedLayerThickness=erodedLayerThickness))
         #erodedLayerThickness is representing the total layer thickness eroded by all ion species together over all time steps from 0 to x (x in [0, len(dt)])
 
-        return Y_i[0], Y_i[1], Y_i[2], Y_i[3], Y_i[4], erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness
+        return [Y_i[0], Y_i[1], Y_i[2], Y_i[3], Y_i[4], erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness]
     
     else:
         return 'lengths of input arrays is not matching'
 
 #######################################################################################################################################################################
-def processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, plotting=False):
+def processOP2Dataold(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, plotting=False):
     ''' calculate sputtering related physical quantities (sputtering yields, erosion rates, layer thicknesses)
         all arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
         ne in [1/m^3], Te in [eV] and assumption that Te=Ti, t in [s], Ts in [K], alpha in [rad], LP_position in [m] from pumping gap, ion masses m_i in [kg], f_i are ion concentrations, k in [eV/K], n_target in [1/m^3]
@@ -255,8 +255,12 @@ def processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, 
             timesteps = np.array(timesteps)
 
             #calculate sputtering yields for each ion species ([H, D, T, C, O]), erosion rates, layer thicknesses
-            Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, m_i, f_i, ions, k, n_target)
-            
+            return_erosion = calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, m_i, f_i, ions, k, n_target)
+            if type(return_erosion) == str:
+                print(return_erosion)
+                exit()
+            else:
+                Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = return_erosion
             #plot n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness over time
             if plotting==True:    
                 safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=divertorUnit, position=position)
@@ -316,3 +320,490 @@ def processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, 
     tableOverview.to_csv(safe, sep=';')
         
 #######################################################################################################################################################################
+
+def processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, index_lower, index_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, plotting=False):
+    ''' calculate sputtering related physical quantities (sputtering yields, erosion rates, layer thicknesses)
+        all arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
+        ne in [1/m^3], Te in [eV] and assumption that Te=Ti, t in [s], Ts in [K], alpha in [rad], LP_position in [m] from pumping gap, ion masses m_i in [kg], f_i are ion concentrations, k in [eV/K], n_target in [1/m^3]
+        does not return something but writes measurement values and calculated values to 'results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)
+        plots are saved in safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=divertorUnit, position=position)
+        plotting=True refers to the plotting of erosion yields, erosion rate, etc over time'''
+    Y_H, Y_D, Y_T, Y_C, Y_O = [], [], [], [], []
+    erosionRate_dt_position, erodedLayerThickness_dt_position, erodedLayerThickness_position = [], [], []
+    LP, LP_distance, time = [], [], [] #LP is the number of the langmuir probe and which divertor unit it belongs to, LP_distance is the distance in [m] from the pumping gap
+    ne, Te, Ts = [], [], []
+
+    divertorUnit = 'lower'
+
+    #treat each divertor unit separately
+    for ne_divertorUnit, Te_divertorUnit, Ti_divertorUnit, Ts_divertorUnit, LP_indices, t_divertorUnit in zip([ne_lower, ne_upper], [Te_lower, Te_upper], [Te_lower, Te_upper], [Ts_lower, Ts_upper], [index_lower, index_upper], [t_lower, t_upper]):
+        
+        Y_0_divertorUnit, Y_1_divertorUnit, Y_2_divertorUnit, Y_3_divertorUnit, Y_4_divertorUnit = [], [], [], [], []
+        erosionRate_dt_divertorUnit, erodedLayerThickness_dt_divertorUnit, erodedLayerThickness_divertorUnit = [], [], []
+        #position = 1
+
+        #treat each langmuir probe position separately
+        for n_e, T_e, T_i, T_s, LP_index, dt in zip(ne_divertorUnit, Te_divertorUnit, Ti_divertorUnit, Ts_divertorUnit, LP_indices, t_divertorUnit):
+            #I need the time differences between two adjacent times to give to the function below
+            if len(dt) != 0:
+                timesteps = [dt[0]]
+            else:
+                timesteps = []
+
+            for j in range(1, len(dt)):
+                timesteps.append(dt[j] - dt[j - 1])
+            timesteps = np.array(timesteps)
+
+            #calculate sputtering yields for each ion species ([H, D, T, C, O]), erosion rates, layer thicknesses
+            return_erosion = calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, m_i, f_i, ions, k, n_target)
+            if type(return_erosion) == str:
+                print(return_erosion)
+                exit()
+            else:
+                Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = return_erosion
+            #plot n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness over time
+            if plotting==True:    
+                safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=divertorUnit, position=LP_index)
+                plot.plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness, dt, safe)
+    
+            #nested with e.g. Y_0[0] is sputtering yield for H for first position over all times
+            Y_0_divertorUnit.append(Y_0)    
+            Y_1_divertorUnit.append(Y_1)    
+            Y_2_divertorUnit.append(Y_2)    
+            Y_3_divertorUnit.append(Y_3)    
+            Y_4_divertorUnit.append(Y_4)  
+            erosionRate_dt_divertorUnit.append(erosionRate_dt)
+            erodedLayerThickness_dt_divertorUnit.append(erodedLayerThickness_dt)
+            erodedLayerThickness_divertorUnit.append(erodedLayerThickness)
+            
+            ne.append(n_e)
+            Te.append(T_e)
+            Ts.append(T_s)
+            
+            time.append(dt)
+            LP.append(['{divertorUnit}{position}'.format(divertorUnit=divertorUnit, position=LP_index)]*len(Y_0))
+            LP_distance.append([LP_position[LP_index]]*len(Y_0))
+            #position += 1
+
+        #nested with e.g. Y_H[0] is sputtering yield for H on lower divertor for all positions there over all times, Y_H[0][0] for first position over all times    
+        Y_H.append(Y_0_divertorUnit)
+        Y_D.append(Y_1_divertorUnit)
+        Y_T.append(Y_2_divertorUnit)
+        Y_C.append(Y_3_divertorUnit)
+        Y_O.append(Y_4_divertorUnit)
+        erosionRate_dt_position.append(erosionRate_dt_divertorUnit)
+        erodedLayerThickness_dt_position.append(erodedLayerThickness_dt_divertorUnit)
+        erodedLayerThickness_position.append(erodedLayerThickness_divertorUnit)
+
+        divertorUnit = 'upper'
+
+    tableOverview = {'LangmuirProbe':list(itertools.chain.from_iterable(LP)), #chain.from_iterable flattens nested lists by one dimension
+                    'Position':list(itertools.chain.from_iterable(LP_distance)),
+                    'time':list(itertools.chain.from_iterable(time)),
+                    'ne':list(itertools.chain.from_iterable(ne)),
+                    'Te':list(itertools.chain.from_iterable(Te)),
+                    'Ts':list(itertools.chain.from_iterable(Ts)),
+                    'Y_H':list(itertools.chain.from_iterable(list(itertools.chain.from_iterable(Y_H)))), 
+                    'Y_D':list(itertools.chain.from_iterable(list(itertools.chain.from_iterable(Y_D)))), 
+                    'Y_T':list(itertools.chain.from_iterable(list(itertools.chain.from_iterable(Y_T)))), 
+                    'Y_C':list(itertools.chain.from_iterable(list(itertools.chain.from_iterable(Y_C)))), 
+                    'Y_O':list(itertools.chain.from_iterable(list(itertools.chain.from_iterable(Y_O)))), 
+                    'erosionRate':list(itertools.chain.from_iterable(list(itertools.chain.from_iterable(erosionRate_dt_position)))),
+                    'erodedLayerThickness':list(itertools.chain.from_iterable(list(itertools.chain.from_iterable(erodedLayerThickness_dt_position)))),
+                    'totalErodedLayerThickness':list(itertools.chain.from_iterable(list(itertools.chain.from_iterable(erodedLayerThickness_position))))}
+
+    #print(len(tableOverview['LangmuirProbe']), len(tableOverview['time']), len(tableOverview['Y_O']), len(tableOverview['erosionRate']), len(tableOverview['erodedLayerThickness']),len(tableOverview['totalErodedLayerThickness']))
+
+    #does not return anything but saves measured values and calculated quantities in .csv file
+    tableOverview = pd.DataFrame(tableOverview) #missing values in the table are nan values
+    safe = 'results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)
+    tableOverview.to_csv(safe, sep=';')
+        
+#######################################################################################################################################################################
+#######################################################################################################################################################################
+def findIndexLP(overviewTable):
+    ''' finds first and last index of each langmuir probe in overviewTable and returns 2D array with [[LP1, firstIndex1, lastindex1], [LP2, firstindex2, last index2], ...]'''
+    #langmuir probes which were active during discharge corresponding to overviewTable
+    LPs = list(np.unique(overviewTable['LangmuirProbe']))
+
+    indexLPfirst = []
+    indexLPlast = []
+
+    for LP in LPs:
+        indexLPfirst.append(list(overviewTable['LangmuirProbe']).index(LP)) #.index finds index of first list element that is equal to LP 
+    
+    for indexFirst in indexLPfirst[1:]:
+        indexLPlast.append(indexFirst - 1)  #first index of next LP minus 1 is last index of LP in question
+    indexLPlast.append(len(overviewTable['LangmuirProbe']) - 1) #for last LP last index is last index of overviewTable['LangmuirProbe']
+    
+    return np.array([LPs, indexLPfirst, indexLPlast]).T #ATTENTION: ALL ELEMENTS ARE STRINGS
+
+#######################################################################################################################################################################
+def intrapolateMissingNeValues(overviewTable, LPindices):
+    ne_list = []
+    for index, ne in enumerate(overviewTable['ne']):
+        if ne == 0 or np.isnan(ne): #intrapolation required
+            if index in LPindices.T[1]: #if first value is missing
+                ne_list.append(overviewTable['ne'][index - 1])
+            
+            elif index in LPindices.T[2]: #if last value is missing
+                ne_list.append(overviewTable['ne'][index + 1])
+            
+            else: #if intermediate value is missing
+                if overviewTable['ne'][index + 1] != 0 and not np.isnan(overviewTable['ne'][index + 1]): #if value after exist
+                    ne_list.append((ne_list[index - 1] + overviewTable['ne'][index + 1])/2)
+                
+                else : #value after is missing
+                    for counter, i in enumerate(range(index + 2, LPindices[-1][2])):
+                        if i in LPindices.T[2]: #last value is reached without finding an existing value, append last existing value
+                            ne_list.append(ne_list[index - 1])
+                            break
+
+                        elif overviewTable['ne'][i] != 0 and not np.isnan(overviewTable['ne'][i]):  #find existing value before hitting last index, append inbetween of last existing value and that value (according to number of missing values)
+                            ne_list.append((ne_list[index - 1] + overviewTable['ne'][i])/(counter + 1))
+                            break
+                        
+        else:   #no intrapolation, just take existing value
+            ne_list.append(ne)
+
+#######################################################################################################################################################################
+def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_i, ions, k, n_target):
+    ''' intrapolates missing values in electron density ne, electron temperature Te, and surface temperature Ts linearly
+        calculates sputtering yields, erosion rates, and layer thicknesses
+        returns updated overviewTable and overwrites old file with missing values
+        adds columns "origin_ne", "origin_Te", "origin_Ts" with measured values having a "M" and intraploated an "I"
+        ATTENTION: ALL ELEMENTS OF LPindices ARE STRINGS'''
+
+    for quantity_column in ['ne', 'Te', 'Ts']:
+        quantity_list = []
+        quantity_origin = []
+        for index, quantity in enumerate(overviewTable[quantity_column]):
+            if quantity == 0 or np.isnan(quantity): #intrapolation required
+                quantity_origin.append('I')
+
+                if str(index) in LPindices.T[1]: #if first value is missing
+                    print(str(index) + ' in LPfirst')
+
+                    if str(index) in LPindices.T[2]: #if first value is also last value and missing
+                        quantity_list.append(np.nan)
+                    
+                    else: #if first value is not also last value
+                        for counter, i in enumerate(range(index + 1, int(LPindices[-1][2]) + 1)):
+                            if overviewTable[quantity_column][i] != 0 and not np.isnan(overviewTable[quantity_column][i]):  #find existing value before hitting last index, append inbetween of last existing value and that value (according to number of missing values)
+                                quantity_list.append((quantity_list[index - 1] + overviewTable[quantity_column][i])/(counter + 2))
+                                break
+
+                            elif str(i) in LPindices.T[2]: #last value is reached without finding an existing value, append nan
+                                quantity_list.append(np.nan)
+                                break
+
+                elif str(index) in LPindices.T[2]: #if last value is missing
+                    quantity_list.append(quantity_list[index - 1])
+                    print(str(index) + ' in LPlast')
+
+                
+                else: #if intermediate value is missing
+                    for counter, i in enumerate(range(index + 1, int(LPindices[-1][2]) + 1)):
+                        if overviewTable[quantity_column][i] != 0 and not np.isnan(overviewTable[quantity_column][i]):  #find existing value before hitting last index, append inbetween of last existing value and that value (according to number of missing values)
+                            quantity_list.append((quantity_list[index - 1] + overviewTable[quantity_column][i])/(counter + 2))
+                            break
+
+                        elif str(i) in LPindices.T[2]: #last value is reached without finding an existing value, append last existing value
+                            quantity_list.append(quantity_list[index - 1])
+                            break
+                            
+            else:   #no intrapolation, just take existing value
+                quantity_list.append(quantity)
+                quantity_origin.append('M')
+
+        if quantity_column == 'ne':
+            ne_list = np.array(np.array_split(quantity_list, len(LPindices)))
+            origin_ne = quantity_origin
+        elif quantity_column == 'Te':
+            Te_list = np.array(np.array_split(quantity_list, len(LPindices)))
+            origin_Te = quantity_origin
+        else:
+            Ts_list = np.array(np.array_split(quantity_list, len(LPindices)))
+            origin_Ts = quantity_origin
+
+    #get time steps
+    timesteps = [overviewTable['time'][0]]
+    for j in range(1, len(overviewTable['time'][:int(LPindices[0][2]) + 1])):
+        timesteps.append(overviewTable['time'][j] - overviewTable['time'][j - 1])
+    timesteps = np.array(timesteps)
+
+    #now calculate sputtering yields
+    #Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = calculateErosionRelatedQuantitiesOnePosition(Te_list, Te_list, Ts_list, ne_list, timesteps, alpha, m_i, f_i, ions, k, n_target)
+    for list in [Te_list, Te_list, Ts_list, ne_list, timesteps]:
+        print(len(list))
+        print(list)
+    
+    Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = [], [], [], [], [], []
+
+    for T_e, T_i, T_s, n_e in zip(Te_list, Te_list, Ts_list, ne_list):
+        return_erosion = calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, m_i, f_i, ions, k, n_target)
+        if type(return_erosion) == str:
+            print(return_erosion)
+            exit()
+        else:
+            Y_0.append(return_erosion[0])
+            Y_3.append(return_erosion[3])
+            Y_4.append(return_erosion[4])
+            erosionRate_dt.append(return_erosion[5])
+            erodedLayerThickness_dt.append(return_erosion[6])
+            erodedLayerThickness.append(return_erosion[7])
+
+    #overwrite overviewTable file
+    overviewTable['ne'] = np.hstack(ne_list)
+    overviewTable['origin_ne'] = origin_ne
+    overviewTable['Te'] = np.hstack(Te_list)
+    overviewTable['origin_Te'] = origin_Te
+    overviewTable['Ts'] = np.hstack(Ts_list)
+    overviewTable['origin_Ts'] = origin_Ts
+    overviewTable['Y_H'] = np.hstack(Y_0)
+    overviewTable['Y_C'] = np.hstack(Y_3)
+    overviewTable['Y_O'] = np.hstack(Y_4)
+    overviewTable['erosionRate'] = np.hstack(erosionRate_dt)
+    overviewTable['erodedLayerThickness'] = np.hstack(erodedLayerThickness_dt)
+    overviewTable['totalErodedLayerThickness'] = np.hstack(erodedLayerThickness)
+
+    #does not return anything but saves measured values and calculated quantities in .csv file
+    overviewTable = pd.DataFrame(overviewTable) #missing values in the table are nan values
+    safe = 'results/calculationTablesNew/results_{discharge}.csv'.format(discharge=discharge)
+    overviewTable.to_csv(safe, sep=';')
+    
+    return overviewTable
+
+#######################################################################################################################################################################
+def calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated=False):
+    ''' calculates total erosion layer thickness for all LPs of a discharge by adding erosion layer thickness up to last LP measurement to erosion layer thickness from last LP measurement to end of discharge
+        duration is duration of discharge corresponding to overviewTable that is by default not intrapolated (intrapolated=False) 
+        returns 2D array of structure [[LP1, erosionLayer1], [LP2, erosionLayer2], ...]'''
+    #get first and last index of each LP in overviewTable, LPindices is 2D array with [[LP1, firstIndex1, lastindex1], [LP2, firstindex2, last index2], ...]
+    LPindices = findIndexLP(overviewTable) 
+
+    #intrapolate overviewTable in required
+    if intrapolated == False:
+        overviewTable = intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_i, ions, k, n_target)
+
+    #will hold the total erosion layer thickness at each LP position after discharge
+    erosion = []
+
+    #find last valid measurement (time < duration)
+    if max(overviewTable['time']) > duration:
+        lastTime = [j > duration for j in overviewTable['time']].index(True) - 1
+    else:
+        lastTime = int(LPindices[0][2])
+
+    for counter, LP in enumerate(LPindices):
+        lastTimeIndex = counter + lastTime
+        erosionDuringLP = overviewTable['totalErodedLayerThickness'][lastTimeIndex] #total eroded layer thickness for time interval until last LP measurement
+        erosionAfterLP = overviewTable['erosionRate'][lastTimeIndex] * (duration - overviewTable['time'][lastTimeIndex]) #total eroded layer thickness for time interval after last LP measurement, multiply last erosion rate with time step till end of discharge
+        erosion.append([LP[0], erosionDuringLP + erosionAfterLP])
+    
+    return erosion
+
+#######################################################################################################################################################################
+def calculateTotalErodedLayerThicknessSeveralDischarges(discharges, durations, overviewTables, alpha, m_i, f_i, ions, k, n_target, intrapolated=False):
+    ''' calculates total erosion layer thickness for all LPs of a discharge by adding erosion layer thickness up to last LP measurement to erosion layer thickness from last LP measurement to end of discharge
+        duration is duration of discharge corresponding to overviewTable that is by default not intrapolated (intrapolated=False) 
+        returns 2D array of structure [[LP1, erosionLayer1], [LP2, erosionLayer2], ...]'''
+    LP_lower0, LP_lower1, LP_lower2, LP_lower3, LP_lower4, LP_lower5, LP_lower6, LP_lower7, LP_lower8, LP_lower9, LP_lower10, LP_lower11, LP_lower12, LP_lower13, LP_lower14, LP_lower15, LP_lower16, LP_lower17 = [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [] 
+    LP_upper0, LP_upper1, LP_upper2, LP_upper3, LP_upper4, LP_upper5, LP_upper6, LP_upper7, LP_upper8, LP_upper9, LP_upper10, LP_upper11, LP_upper12, LP_upper13, LP_upper14, LP_upper15, LP_upper16, LP_upper17 = [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []
+    lower = [False] * 18
+    upper = [False] * 18
+    for discharge, duration, overviewTable in zip(discharges, durations, overviewTables):
+        erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated)
+        for erosionLP in erosion:
+            if 'lower0' == erosionLP[0]:
+                LP_lower0.append(erosionLP[1])
+                lower[0] = True
+            elif 'lower1' == erosionLP[0]:
+                LP_lower1.append(erosionLP[1])
+                lower[1] = True
+            elif 'lower2' == erosionLP[0]:
+                LP_lower2.append(erosionLP[1])
+                lower[2] = True
+            elif 'lower3' == erosionLP[0]:
+                LP_lower3.append(erosionLP[1])
+                lower[3] = True
+            elif 'lower4' == erosionLP[0]:
+                LP_lower4.append(erosionLP[1])
+                lower[4] = True
+            elif 'lower5' == erosionLP[0]:
+                LP_lower5.append(erosionLP[1])
+                lower[5] = True
+            elif 'lower6' == erosionLP[0]:
+                LP_lower6.append(erosionLP[1])
+                lower[6] = True
+            elif 'lower7' == erosionLP[0]:
+                LP_lower7.append(erosionLP[1])
+                lower[7] = True
+            elif 'lower8' == erosionLP[0]:
+                LP_lower8.append(erosionLP[1])
+                lower[8] = True
+            elif 'lower9' == erosionLP[0]:
+                LP_lower9.append(erosionLP[1])
+                lower[9] = True
+            elif 'lower10' == erosionLP[0]:
+                LP_lower10.append(erosionLP[1])
+                lower[10] = True
+            elif 'lower11' == erosionLP[0]:
+                LP_lower11.append(erosionLP[1])
+                lower[11] = True
+            elif 'lower12' == erosionLP[0]:
+                LP_lower12.append(erosionLP[1])
+                lower[12] = True
+            elif 'lower13' == erosionLP[0]:
+                LP_lower13.append(erosionLP[1])
+                lower[13] = True
+            elif 'lower14' == erosionLP[0]:
+                LP_lower14.append(erosionLP[1])
+                lower[14] = True
+            elif 'lower15' == erosionLP[0]:
+                LP_lower15.append(erosionLP[1])
+                lower[15] = True
+            elif 'lower16' == erosionLP[0]:
+                LP_lower16.append(erosionLP[1])
+                lower[16] = True
+            elif 'lower17' == erosionLP[0]:
+                LP_lower17.append(erosionLP[1])
+                lower[17] = True
+            
+            elif 'upper0' == erosionLP[0]:
+                LP_upper0.append(erosionLP[1])
+                upper[0] = True
+            elif 'upper1' == erosionLP[0]:
+                LP_upper1.append(erosionLP[1])
+                upper[1] = True
+            elif 'upper2' == erosionLP[0]:
+                LP_upper2.append(erosionLP[1])
+                upper[2] = True
+            elif 'upper3' == erosionLP[0]:
+                LP_upper3.append(erosionLP[1])
+                upper[3] = True
+            elif 'upper4' == erosionLP[0]:
+                LP_upper4.append(erosionLP[1])
+                upper[4] = True
+            elif 'upper5' == erosionLP[0]:
+                LP_upper5.append(erosionLP[1])
+                upper[5] = True
+            elif 'upper6' == erosionLP[0]:
+                LP_upper6.append(erosionLP[1])
+                upper[6] = True
+            elif 'upper7' == erosionLP[0]:
+                LP_upper7.append(erosionLP[1])
+                upper[7] = True
+            elif 'upper8' == erosionLP[0]:
+                LP_upper8.append(erosionLP[1])
+                upper[8] = True
+            elif 'upper9' == erosionLP[0]:
+                LP_upper9.append(erosionLP[1])
+                upper[9] = True
+            elif 'upper10' == erosionLP[0]:
+                LP_upper10.append(erosionLP[1])
+                upper[10] = True
+            elif 'upper11' == erosionLP[0]:
+                LP_upper11.append(erosionLP[1])
+                upper[11] = True
+            elif 'upper12' == erosionLP[0]:
+                LP_upper12.append(erosionLP[1])
+                upper[12] = True
+            elif 'upper13' == erosionLP[0]:
+                LP_upper13.append(erosionLP[1])
+                upper[13] = True
+            elif 'upper14' == erosionLP[0]:
+                LP_upper14.append(erosionLP[1])
+                upper[14] = True
+            elif 'upper15' == erosionLP[0]:
+                LP_upper15.append(erosionLP[1])
+                upper[15] = True
+            elif 'upper16' == erosionLP[0]:
+                LP_upper16.append(erosionLP[1])
+                upper[16] = True
+            elif 'upper17' == erosionLP[0]:
+                LP_upper17.append(erosionLP[1])
+                upper[17] = True
+
+        if not lower[0]:
+            LP_lower0.append(np.nan)
+        if not lower[1]:
+            LP_lower1.append(np.nan)
+        if not lower[2]:
+            LP_lower2.append(np.nan)
+        if not lower[3]:
+            LP_lower3.append(np.nan)
+        if not lower[4]:
+            LP_lower4.append(np.nan)
+        if not lower[5]:
+            LP_lower5.append(np.nan)
+        if not lower[6]:
+            LP_lower6.append(np.nan)
+        if not lower[7]:
+            LP_lower7.append(np.nan)
+        if not lower[8]:
+            LP_lower8.append(np.nan)
+        if not lower[9]:
+            LP_lower9.append(np.nan)
+        if not lower[10]:
+            LP_lower10.append(np.nan)
+        if not lower[11]:
+            LP_lower11.append(np.nan)
+        if not lower[12]:
+            LP_lower12.append(np.nan)
+        if not lower[13]:
+            LP_lower13.append(np.nan)
+        if not lower[14]:
+            LP_lower14.append(np.nan) 
+        if not lower[15]:
+            LP_lower15.append(np.nan) 
+        if not lower[16]:
+            LP_lower16.append(np.nan) 
+        if not lower[17]:
+            LP_lower17.append(np.nan) 
+        
+        if not upper[0]:
+            LP_upper0.append(np.nan) 
+        if not upper[1]:
+            LP_upper1.append(np.nan)   
+        if not upper[2]:
+            LP_upper2.append(np.nan)
+        if not upper[3]:
+            LP_upper3.append(np.nan)   
+        if not upper[4]:
+            LP_upper4.append(np.nan)   
+        if not upper[5]:
+            LP_upper5.append(np.nan)   
+        if not upper[6]:
+            LP_upper6.append(np.nan)   
+        if not upper[7]:
+            LP_upper7.append(np.nan)   
+        if not upper[8]:
+            LP_upper8.append(np.nan)   
+        if not upper[9]:
+            LP_upper9.append(np.nan)   
+        if not upper[10]:
+            LP_upper10.append(np.nan)   
+        if not upper[11]:
+            LP_upper11.append(np.nan)   
+        if not upper[12]:
+            LP_upper12.append(np.nan)   
+        if not upper[13]:
+            LP_upper13.append(np.nan)   
+        if not upper[14]:
+            LP_upper14.append(np.nan)   
+        if not upper[15]:
+            LP_upper15.append(np.nan)   
+        if not upper[16]:
+            LP_upper16.append(np.nan)   
+        if not upper[17]:
+            LP_upper17.append(np.nan)
+    
+    erosionTable = pd.DataFrame({})
+    for LP, LP_name in zip([LP_lower0, LP_lower1, LP_lower2, LP_lower3, LP_lower4, LP_lower5, LP_lower6, LP_lower7, LP_lower8, LP_lower9, LP_lower10, LP_lower11, LP_lower12, LP_lower13, LP_lower14, LP_lower15, LP_lower16, LP_lower17,
+                            LP_upper0, LP_upper1, LP_upper2, LP_upper3, LP_upper4, LP_upper5, LP_upper6, LP_upper7, LP_upper8, LP_upper9, LP_upper10, LP_upper11, LP_upper12, LP_upper13, LP_upper14, LP_upper15, LP_upper16, LP_upper17],
+                            ['lower0', 'lower1', 'lower2', 'lower3', 'lower4', 'lower5', 'lower6', 'lower7', 'lower8', 'lower9', 'lower10', 'lower11', 'lower12', 'lower13', 'lower14', 'lower15', 'lower16', 'lower17', 
+                             'upper0', 'upper1', 'upper2', 'upper3', 'upper4', 'upper5', 'upper6', 'upper7', 'upper8', 'upper9', 'upper10', 'upper11', 'upper12', 'upper13', 'upper14', 'upper15', 'upper16', 'upper17']):
+        erosionTable[LP_name] = LP
+    erosionTable.to_csv('results/totalErosionAtPosition.csv', sep=';')
+            

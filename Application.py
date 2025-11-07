@@ -70,16 +70,16 @@ juicePath = [r"\\share\groups\E3\Diagnostik\DIA-3\QRH_PWI\experiment_analysis\BA
 discharges = read.readAllShotNumbersFromJuice(juicePath) #samples all discharge IDs from juice files under "juicePath", their configuration and duration, rerurned as dictoinary with keys 'dischargeID', 'configuration', 'duration'
 dischargeIDs = discharges['dischargeID']
 
-#dischargeIDs = ['W7X20241022.045']#20250304.086']#W7X20241022.046']   #20241127.034' #manually
+#dischargeIDs = ['W7X20241001.046', 'W7X20250304.086']#W7X20241022.046']   #20241127.034' #manually
 
 #reality check
-#ne, Te, Ts, Ts2, timesteps = np.array([23.02 * 1e+18]), np.array([13.26]), np.array([344.6079519215609]), np.array([344.6079519215609 + 600]), np.array([2])
+#ne, Te, Ts, Ts2, timesteps = np.array([23.02 * 1e+18]), np.array([13.26]), np.array([550 + 273.15]), np.array([150 + 273.15]), np.array([10])
 #Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = process.calculateErosionRelatedQuantitiesOnePosition(Te, Te, Ts, ne, timesteps, alpha, m_i, f_i, ions, k, n_target)
 #print(Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness)
 #Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = process.calculateErosionRelatedQuantitiesOnePosition(Te, Te, Ts2, ne, timesteps, alpha, m_i, f_i, ions, k, n_target)
 #print(Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness)
 
-run = True
+run = False
 
 #######################################################################################################################################################################
 #######################################################################################################################################################################
@@ -89,6 +89,17 @@ run = True
 
 #######################################################################################################################################################################
 #PROGRAM CODE FOR OP2 DISCHARGE GIVEN AS "DISCHARGE"
+
+discharge = ['20241022.049']
+dischargeIndex = list(dischargeIDs).index('W7X' + discharge[0])
+duration = [discharges['duration'][dischargeIndex]]
+overviewTable = [pd.read_csv('results/calculationTables/results_{discharge}.csv'.format(discharge=discharge[0]), sep=';')]
+#LPindices = process.findIndexLP(overviewTable)
+#print(LPindices)
+#overviewTable = process.intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_i, ions, k, n_target)
+#erosion = process.calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated=False)
+process.calculateTotalErodedLayerThicknessSeveralDischarges(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated=False)
+
 if not run:
     exit()
 
@@ -105,11 +116,11 @@ if __name__ == '__main__':
     LP_position.append(OP2_TM8Distances)
     LP_position = list(itertools.chain.from_iterable(LP_position)) #flattens to 1D list
 
-    not_workingLP, not_workingIR = [], []
+    not_workingLP, not_workingIR, not_workingTrigger = [], [], []
     for counter, discharge in enumerate(dischargeIDs[:]):
         #cut 'W7X' in front of the discharge ID
         discharge = discharge[3:]
-        print(not_workingLP, not_workingIR)
+        print(not_workingTrigger)#not_workingLP, not_workingIR, 
 
         #read Langmuir Probe data from xdrive
         #all arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
@@ -138,7 +149,10 @@ if __name__ == '__main__':
         #Ts in [K], LP_position in [m] from pumping gap, time_array in [s]
         return_IR = read.readSurfaceTemperatureFramesFromIRcam(discharge, time_array, ['lower', 'upper'], LP_position, [index_lower, index_upper])
         if type(return_IR) == str:
-            not_workingIR.append([discharge, counter])
+            if return_IR == 'No IRcam stream for any time in discharge':
+                not_workingIR.append([discharge, counter])
+            else:
+                not_workingTrigger.append([discharge, counter])
             continue
         Ts_lower, Ts_upper = return_IR
         
@@ -167,8 +181,9 @@ if __name__ == '__main__':
         #ne in [1/m^3], Te in [eV] and assumption that Te=Ti, t in [s], Ts in [K], alpha in [rad], LP_position in [m] from pumping gap, m in [kg], k in [eV/K], n_target in [1/m^3]
         #does not return something but writes measurement values and calculated values to 'results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)
         #plots are saved in safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=divertorUnit, position=position)
-        process.processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, True)
+        process.processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, index_lower, index_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, True)
 
+    print(not_workingTrigger, not_workingLP, not_workingIR)
 #Warning from GitBash when heatflux code was added: LF will be replaced by CRLF the next time Git touches it
 #######################################################################################################################################################################
 #read data from archieveDB
@@ -177,3 +192,22 @@ if __name__ == '__main__':
 #######################################################################################################################################################################
 #references for look-up values
 # Ref.1: D. Naujoks. Plasma-Material Interaction in Controlled Fusion (Vol. 39 in Springer Series on Atomic, Optical, and Plasma Physics). Ed. by G. W. F. Drake, Dr. G. Ecker, and Dr. H. Kleinpoppen. Springer-Verlag Berlin Heidelberg, 2006. 
+
+#KONTROLLIERE DELTA_EROSION AUF FEHLENDE WERTE (20241022.049 upper15) 
+#-> WENN FÜR EINEN ZEITPUNKT KEIN NE ODER SO VORLIEGT, MUSS INTRAPOLIERT WERDEN (DURCHSCHNITT VOM VORHERIGEN UND NACHFOLGENDEN WERT AUßER ES GIBT IHN NICHT, DANN NUR DEN EXISTENTEN WIEDERVERWENDEN)
+#GENAUSO FÜR ALLE ANDEREN PARAMETER UND BIS ZUM ENDE DER ENTLADUNG
+#-> SPRICH NACH DEM RAUSSCHREIBEN ÜBERARBEITEN? EXTRAPOLIERTE DATEN KENNZEICHNEN!!!
+#FÜR EINE ENTLADUNG TESTEN, DANN FÜR ALLE
+
+#DURCHSCHNITTLICHE ENTLADUNG NEHMEN UND ABTRAGUNG FÜR GANZE KAMPAGNE HOCHRECHNEN
+
+#EROSIONSSCHICHTDICKE FÜR JEDE LP AUFSUMMIEREN -> WAS TUN MIT FEHLENDEN WERTEN FÜR GANZE ENTLADUNG?
+#-> FÜR FTM LP0 BIS LP13 EGAL, FÜR EIM/KJM LP14 BIS LP17 EGAL? ANDERE KONFIGUARTIONEN EH EGAL? 
+#-> LAUFZEIT FÜR JEDE LP IN JEDER KONFIGURATION BERECHNEN, ANTEIL VON GESAMTENTLADUNGSZEIT IN DIESER KONFIGURATION, MULTIPLIKATION UM AUF 100% ZU KOMMEN?
+#-> PLOTTEN FÜR EINZELENTLADUNG UND ÜBER ALLE ENTLADUNGEN
+
+#BERÜCKSICHTIGEN DER WIEDERABLAGERUNG
+
+#RAUSSUCHEN VON ENTLADUNGEN FÜR IMPURITIES: EIM, LANG, STABILE PLASMAPARAMETER, ALLE LP UND IR DATEN VORHANDEN, IN OP2.3, KURZ NACH/ZWISCHEN/KURZ VOR BORIERUNG
+
+#BERICHT: BILDER EINFÜGEN
