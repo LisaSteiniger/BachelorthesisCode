@@ -2,6 +2,8 @@
     As most data for OP2.2/2.3 is not yet uploaded to ArchiveDB, functions for reading from xdrive and other storage options are provided to guarantee access to a mayority of the data
     Nevertheless, some discharges remain unavailable and even existing data is not cross checked and processed further (e.g. no removal of surface layer effects on divertor temperature)'''
 
+import requests
+import itertools
 import os
 import w7xarchive   #see https://git.ipp-hgw.mpg.de/kjbrunne/w7xarchive/-/blob/master/doc/workshop.ipynb for introduction
 import matplotlib.pyplot as plt
@@ -26,14 +28,14 @@ def readAllShotNumbersFromJuice(juicePath, safe='results/dischargeIDlistAll.csv'
 
         dischargeIDlist = list(np.unique(juice['shot']))
         configurations = []
-        durations = []
-        discharges = []
+        durations, discharges, overviewTable = [], [], []
         for discharge in dischargeIDlist:
             shot = juice[juice['shot']==discharge]
             print(shot.head()['configuration'])
             discharges.append(list(shot['shot'])[0])
             configurations.append(list(shot['configuration'])[0])
             durations.append(list(shot['t_shot_stop'])[0])
+            overviewTable.append('results/calculationTables/results_{discharge}.csv'.format(discharge=list(shot['shot'])[0][3:])) ####NEW, CAN CAUSE PROBLEMS
 
         dischargeIDcsv = pd.DataFrame({'dischargeID':dischargeIDlist, 'configuration':configurations, 'duration':durations})
         dischargeIDcsv.to_csv(safe, sep=';')
@@ -43,24 +45,31 @@ def readAllShotNumbersFromJuice(juicePath, safe='results/dischargeIDlistAll.csv'
 def getRuntimePerConfiguration(dischargeIDcsv, safe='results/configurationRuntimes.csv'):
     ''' This function determines the absolute and relative runtime of each configuration over all discharges given by "dischargeIDcsv" and writes them as .csv file to safe'''
     configurations = list(np.unique(dischargeIDcsv['configuration']))
-    configurations = list(np.unique([x[:4] for x in configurations]))
+    configurations = list(np.unique([x[:3] for x in configurations]))
     #print(configurations)
 
     runtimes = pd.DataFrame({})
-    absoluteRuntimes, relativeRuntimes = [], []
-    totalRuntime = sum(dischargeIDcsv['duration'])
+    absoluteRuntimes, relativeRuntimes, absoluteNumberOfDischarges, relativeNumberOfDischarges = [], [], [], []
+    totalRuntime = np.nansum(dischargeIDcsv['duration'])
+    totalNumber = len(dischargeIDcsv['duration'])
 
     for configuration in configurations:
         filter = np.array([i.startswith(configuration) for i in dischargeIDcsv['configuration']])
-        runtime = sum(dischargeIDcsv[filter]['duration'])
+        runtime = np.nansum(dischargeIDcsv[filter]['duration'])
         absoluteRuntimes.append(runtime)
         relativeRuntimes.append(runtime/totalRuntime * 100)
+        absoluteNumberOfDischarges.append(sum(filter))
+        relativeNumberOfDischarges.append((sum(filter)/totalNumber) * 100)
 
     configurations.append('all')
     absoluteRuntimes.append(totalRuntime)
     relativeRuntimes.append(100)
+    absoluteNumberOfDischarges.append(totalNumber)
+    relativeNumberOfDischarges.append(100)
 
     runtimes['configuration'] = configurations
+    runtimes['absolute number of discharges'] = absoluteNumberOfDischarges
+    runtimes['relative number of discharges (%)'] = relativeNumberOfDischarges
     runtimes['absolute runtime (s)'] = absoluteRuntimes
     runtimes['relative runtime (%)'] = relativeRuntimes
     runtimes = runtimes.sort_values('absolute runtime (s)')
@@ -221,7 +230,7 @@ def readLangmuirProbeDataFromXdrive(dischargeID):
         test_index = index_upper
     else:
         return 'No LP data available'
-
+    
     if data_lower[test_index[0]].units['time'] == 's' and data_lower[test_index[0]].units['ne'] == '10$^{18}$m$^{-3}$' and data_lower[test_index[0]].units['Te'] == 'eV':
         ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper = [], [], [], [], [], []
         for i in index_lower:
@@ -499,4 +508,164 @@ def readArchieveDB():
                 plt.gca().set_xlabel("time [s]")
                 plt.gca().set_ylabel("data")
                 plt.show()
-                
+
+#######################################################################################################################################################################
+def readAllShotNumbersFromLogbook(safe ='results/configurations/dischargeList_OP_223.csv'):
+    url = 'https://w7x-logbook.ipp-hgw.mpg.de/api/_search'
+
+    # q = 'tags.diagnostic\ result:"raw\ data"'
+    # !! Helium Hydrogen discharges werden hier nicht unterschieden
+
+    #filter options
+    q1 = '!"Conditioning" AND '
+    q2 = '!"gas valve tests" AND '
+    q3 = '!"sniffer tests" AND '
+    q4 = '!"reference discharge" AND '
+    q41 = '"ReferenceProgram"'   # in OP2.1 does not work
+    q5 = '!"Open valves" AND '
+    q6 = 'id:XP_* AND tags.value:"ok" AND '
+    q66 = 'id:XP_* AND '
+    q71 = 'tags.value:"Reference"'  # for OP2.1
+    q44 = '"reference discharge"'   # for OP2.2, OP2.3
+    q45 = '"Reference discharge"'   # for OP1.2b
+
+    id, duration, configuration = [], [], []    #id stores dischargeIDs, duration their ECRH heating period duration, configuration theit configuration
+
+    for config in ['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
+                'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
+                'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520']:
+
+        #filter for configurations (config)
+        q7 = 'tags.value:{config}'.format(config=config)
+
+        #apply neccessary filters
+        q = q1 + q2 + q3 + q66 + q7  
+
+        # p = {'time':op_phase, 'size':'9999', 'q' : q }
+        # p = {'time':'[2018 TO 2018]', 'size':'9999', 'q' : q }   # OP1.2b
+        # p = {'time':'[2022 TO 2023]', 'size':'9999', 'q' : q }   # OP2.1
+        p = {'time':'[2024 TO 2025]', 'size':'9999', 'q' : q }   # OP2.2 and OP2.3
+        
+        res = requests.get(url, params=p).json()
+
+        if res['hits']['total']==0:
+            print('no discharges found')
+            continue
+
+        for discharge in res['hits']['hits']:
+            id.append(discharge['_id']) 
+
+            for tag in discharge['_source']['tags']: 
+                if 'catalog_id' in tag.keys():
+                    if tag['catalog_id'] == '1#3':
+                        duration.append(tag['ECRH duration'])
+                        continue
+
+            if len(duration) != len(id):
+                duration.append(np.nan)
+
+        configuration.append([config] * len(res['hits']['hits']))
+
+    dischargeTable = pd.DataFrame({'configuration': list(itertools.chain.from_iterable(configuration)), 'dischargeID': id, 'duration': duration})
+    dischargeTable.to_csv(safe, sep=';')
+
+    return dischargeTable
+
+
+#SOME NOTES ABOUT WHAT IS IN DATA, CONFIGURATION, ...
+
+# reversed field ========== missing for surface_layers
+# see in Matlab file Aktualisierung für surface_layers_fixed
+#config='"EIM000-2520"'   # 251 in OP2.2/2.3 (13 missing)
+#config='"EIM000-2620"'    # 119 (5 missing)
+#config='"KJM008-2520"'   # 79 in OP2.2/2.3 (1 missing)
+#config='"KJM008-2620"'   # 96 in OP2.2/2.3 (14 missing)
+#config='"FTM000-2620"'   # 40 in OP2.2/2.3, 3 missing
+#config='"FTM004-2520"'   # no discharges in OP2.2/2.3
+#config='"DBM000-2520"'   # 18 in OP2.2/2.3
+#config='"FMM002-2520"'   # 15 in OP2.2/2.3
+
+# normal field ==================================================
+#config='"EIM000+2520"'   # 896 (252 missing), standard config 
+#config='"EIM000+2620"'   # keine discharge
+#config='"EIM000+2614"'   # 103 (5 missing)
+#config='"DBM000+2520"'   # 86 (1 missing), low iota config
+#config='"KJM008+2520"'  # 284 (169 missing), high mirror config
+#config='"KJM008+2620"'   # 28 (11 missing)
+#config='"XIM001+2485"'   # 57 (5 missing), negative mirror config
+#config='"MMG000+2520"'   # 14 (0 missing), low shear config
+#config='"DKJ000+2520"'   # 44 (2 missing), outward-shifted config
+#config='"IKJ000+2520"'   # 53 (1 missing)
+#config='"FMM002+2520"'   # 58 (7 missing), Reversed field config
+#config='"KTM000+2520"'   # 4 (1 missing), high mirror config
+#config='"FTM004+2520"'   #  149 (36 missing), high iota config
+#config='"FTM004+2585"'    # 53 (4 missing)   
+#config='"FTM000+2620"'   #  56 (14 missing)
+#config='"AIM000+2520"'   # 55 (4 missing), low mirror 
+#config='"KOF000+2520"'   # 19 (2 missing), low-shear configuration increased in iota
+# config='"EJM+252"'        # OP1.2b
+#config='"EJM007+2520"'    # OP2.1
+#config='"EJM001+2520"'    # OP2.1
+# ---------------------------------------------------------------
+
+# q = 'id:XP_* AND tags.value:"ok" AND "TC" AND ' + config
+# q = 'id:XP_* AND tags.value:"ok" AND "FZJ" AND ' + config
+# q = 'id:XP_* AND tags.value:"ok" AND "Leakages in EIM" AND ' + config
+# q = 'id:XP_* AND tags.value:"ok" AND "vrh_003" AND ' + config
+# q = 'id:XP_* AND tags.value:"ok" AND "FZJ-MAT2" AND ' + config
+
+
+#res.keys()                                             ['took', 'timed_out', 'hits']
+#res['took']                                            no idea what this returns
+#res['timed_out']                                       returns status of timed_out, either false or true
+
+#res['hits'].keys()                                     ['total', 'max_score', 'hits', 'total_relation']
+#res['hits']['total']                                   total number of discharges for the applied filter
+#res['hits']['max_score']                               no idea what this is, not maximum run time of longest discharge
+#res['hits']['total_relation']                          determines number of all hits (total) to considered hits?
+
+#res['hits']['hits']                                    returns list with all discharges in the filtered version, res['hits']['hits'][0] is first discharge
+#res['hits']['hits'][0].keys()                          ['_index', '_type', '_id', '_score', '_source']
+#res['hits']['hits'][0]['_index']                       returns where this is read from (w7xlogbook)
+#res['hits']['hits'][0]['_type']                        returns type of data (XP_logs)
+#res['hits']['hits'][0]['_id']                          returns dischargeID 
+#res['hits']['hits'][3]['_score']                       no idea what is returned here
+
+#res['hits']['hits'][0]['_source'].keys()               ['id', 'name', 'description', 'session_comment', 'from', 'upto', 'execution_status', 'PP', 'tags', 'component_status', 'version', 'scenarios', 'from_str', 'upto_str', 'comments'] 
+#res['hits']['hits'][0]['_source']['upto_str']          'from_str', 'upto_str' are timestamps in ns from start of program till end of program, but this is not the ECRH heating time
+#res['hits']['hits'][0]['_source']['from_str']
+#res['hits']['hits'][0]['_source']['from']              as lines above but as integer not string
+#res['hits']['hits'][0]['_source']['upto']
+#res['hits']['hits'][0]['_source']['id']                returns dischargeID
+#res['hits']['hits'][0]['_source']['name']              uninteresting
+#res['hits']['hits'][0]['_source']['execution_status']  no idea
+#res['hits']['hits'][0]['_source']['PP']                no idea
+#res['hits']['hits'][0]['_source']['tags']              returns list of dictionaries, see some examples below
+
+
+#ECRH duration{'catalog_id': '1#3', 'unit': 's', 'component': 'CBG ECRH', 'valueNumeric': 15.001, 'name': 'ECRH duration', 'description': 'Total ECRH duration', 'ECRH duration': 15.001, 'category': 'Heating', 'value': '15.001'}, 
+#more ECRH   {'catalog_id': '1#0', 'unit': 'kW', 'component': 'CBG ECRH', 'valueNumeric': 4500.0, 'ECRH': 4500.0, 'name': 'ECRH', 'description': 'Max. power all ECRH gyrotrons', 'category': 'Heating', 'value': '4500.0'}, 
+#            {'catalog_id': '1#1', 'unit': 'MJ', 'component': 'CBG ECRH', 'valueNumeric': 38.63324999999999, 'name': 'ECRH energy', 'description': 'Total ECRH energy', 'category': 'Heating', 'value': '38.63324999999999', 'ECRH energy': 38.63324999999999}, 
+#            {'catalog_id': '1#3', 'unit': 's', 'component': 'CBG ECRH', 'valueNumeric': 15.001, 'name': 'ECRH duration', 'description': 'Total ECRH duration', 'ECRH duration': 15.001, 'category': 'Heating', 'value': '15.001'}, 
+#            {'catalog_id': '1#2', 'unit': None, 'component': 'CBG ECRH', 'ECRH pol': 'X2-mode', 'name': 'ECRH pol', 'description': 'ECRH polarisation mode', 'category': 'Heating', 'value': 'X2-mode'}, 
+#            {'catalog_id': '1#4', 'A1': None, 'unit': 'kW', 'component': 'CBG ECRH', 'name': 'A1', 'description': 'Gyrotron A1 active / max. power', 'category': 'Heating', 'value': None}, 
+#            {'catalog_id': '1#49', 'unit': 'kW', 'component': 'CBG ECRH', 'A5': None, 'name': 'A5', 'description': 'Gyrotron A5 active / max. power', 'category': 'Heating', 'value': None}, 
+#            {'catalog_id': '1#13', 'unit': 'kW', 'component': 'CBG ECRH', 'name': 'B1', 'description': 'Gyrotron B1 active / max. power', 'category': 'Heating', 'value': None, 'B1': None}, 
+#            {'catalog_id': '1#58', 'unit': 'kW', 'component': 'CBG ECRH', 'B5': None, 'name': 'B5', 'description': 'Gyrotron B5 active / max. power', 'category': 'Heating', 'value': None}, 
+#            {'catalog_id': '1#67', 'unit': 'kW', 'component': 'CBG ECRH', 'C5': None, 'name': 'C5', 'description': 'Gyrotron C5 active / max. power', 'category': 'Heating', 'value': None}, 
+#            {'catalog_id': '1#31', 'unit': 'kW', 'component': 'CBG ECRH', 'name': 'D1', 'description': 'Gyrotron D1 active / max. power', 'category': 'Heating', 'value': None, 'D1': None}, 
+#            {'catalog_id': '1#76', 'D5': None, 'unit': 'kW', 'component': 'CBG ECRH', 'name': 'D5', 'description': 'Gyrotron D5 active / max. power', 'category': 'Heating', 'value': None}, 
+#            {'catalog_id': '1#40', 'unit': 'kW', 'component': 'CBG ECRH', 'name': 'E1', 'description': 'Gyrotron E1 active / max. power', 'category': 'Heating', 'E1': None, 'value': None}, 
+#            {'catalog_id': '1#85', 'E5': None, 'unit': 'kW', 'component': 'CBG ECRH', 'name': 'E5', 'description': 'Gyrotron E5 active / max. power', 'category': 'Heating', 'value': None}, 
+#            {'catalog_id': '1#104', 'unit': 'kW', 'component': 'CBG ECRH', 'name': 'F5', 'description': 'Gyrotron F5 active / max. power', 'category': 'Heating', 'value': None, 'F5': None}, 
+#            {'catalog_id': '1#73', 'unit': None, 'component': 'CBG ECRH', 'name': 'C5 oblique', 'C5 oblique': None, 'description': 'Gyrotron C5 oblique', 'category': 'Heating', 'value': None}, 
+#            {'catalog_id': '1#37', 'unit': None, 'component': 'CBG ECRH', 'name': 'D1 oblique', 'description': 'Gyrotron D1 oblique', 'category': 'Heating', 'D1 oblique': None, 'value': None}, 
+#            {'catalog_id': '1#82', 'unit': None, 'component': 'CBG ECRH', 'D5 oblique': None, 'name': 'D5 oblique', 'description': 'Gyrotron D5 oblique', 'category': 'Heating', 'value': None}, 
+#            {'catalog_id': '1#46', 'E1 oblique': None, 'unit': None, 'component': 'CBG ECRH', 'name': 'E1 oblique', 'description': 'Gyrotron E1 oblique', 'category': 'Heating', 'value': None}, 
+#            {'catalog_id': '1#91', 'unit': None, 'component': 'CBG ECRH', 'name': 'E5 oblique', 'description': 'Gyrotron E5 oblique', 'category': 'Heating', 'value': None, 'E5 oblique': None}, 
+
+#NBI energy{'catalog_id': '1#95', 'unit': 'MJ', 'component': 'CDX21 ', 'valueNumeric': 1.1250000000001277, 'name': 'NBI21 energy', 'description': 'Total NBI21 energy', 'NBI21 energy': 1.1250000000001277, 'category': 'Heating', 'value': '1.1250000000001277'}, 
+#NBI duration{'catalog_id': '1#96', 'unit': 's', 'component': 'CDX21 ', 'valueNumeric': 5.0000009999999975, 'name': 'NBI21 duration', 'description': 'Total NBI21 duration', 'category': 'Heating', 'value': '5.0000009999999975', 'NBI21 duration': 5.0000009999999975}, 
+
+#result (ok, poor, failed){'catalog_id': '0#7', 'unit': None, 'component': None, 'name': 'Result', 'description': 'Program result', 'category': 'Experiment', 'value': 'ok', 'Result': 'ok'}, 
+

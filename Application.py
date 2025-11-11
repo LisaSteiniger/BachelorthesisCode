@@ -5,6 +5,7 @@ import os
 import w7xarchive
 import itertools
 import matplotlib
+import requests
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -67,6 +68,9 @@ juicePath = [r"\\share\groups\E3\Diagnostik\DIA-3\QRH_PWI\experiment_analysis\BA
              r"\\share\groups\E3\Diagnostik\DIA-3\QRH_PWI\experiment_analysis\BA Lisa Steiniger\Programmes\PythonScript_LisaSteiniger\BachelorthesisCode\inputFiles\Juice\adb_juice_op23_step_0.2_v0.6_redux.csv"]
 
 #dischargeID
+discharges = read.readAllShotNumbersFromLogbook #for all discharges filtered by Dirk logbook_search, adjust filters directly in function
+read.getRuntimePerConfiguration(discharges)
+
 discharges = read.readAllShotNumbersFromJuice(juicePath) #samples all discharge IDs from juice files under "juicePath", their configuration and duration, rerurned as dictoinary with keys 'dischargeID', 'configuration', 'duration'
 dischargeIDs = discharges['dischargeID']
 
@@ -89,19 +93,18 @@ run = False
 
 #######################################################################################################################################################################
 #PROGRAM CODE FOR OP2 DISCHARGE GIVEN AS "DISCHARGE"
+if not run:
+    exit()
 
 discharge = ['20241022.049']
 dischargeIndex = list(dischargeIDs).index('W7X' + discharge[0])
 duration = [discharges['duration'][dischargeIndex]]
 overviewTable = [pd.read_csv('results/calculationTables/results_{discharge}.csv'.format(discharge=discharge[0]), sep=';')]
-#LPindices = process.findIndexLP(overviewTable)
+LPindices = process.findIndexLP(overviewTable)
 #print(LPindices)
 #overviewTable = process.intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_i, ions, k, n_target)
 #erosion = process.calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated=False)
 process.calculateTotalErodedLayerThicknessSeveralDischarges(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated=False)
-
-if not run:
-    exit()
 
 if __name__ == '__main__':
     #_lower indicates lower divertor unit, _upper upper divertor unit
@@ -184,6 +187,10 @@ if __name__ == '__main__':
         process.processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, index_lower, index_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, True)
 
     print(not_workingTrigger, not_workingLP, not_workingIR)
+
+    #intrapolate missing values, calculate total eroded layer thickness
+    process.calculateTotalErodedLayerThicknessSeveralDischarges(discharges['dischargeID'], discharges['duration'], discharges['overviewTable'], alpha, m_i, f_i, ions, k, n_target, intrapolated=False)
+
 #Warning from GitBash when heatflux code was added: LF will be replaced by CRLF the next time Git touches it
 #######################################################################################################################################################################
 #read data from archieveDB

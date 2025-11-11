@@ -613,6 +613,8 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(discharges, durations, o
     lower = [False] * 18
     upper = [False] * 18
     for discharge, duration, overviewTable in zip(discharges, durations, overviewTables):
+        discharge = discharge[3:]
+        overviewTable = pd.read_csv(overviewTable, sep=';')
         erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated)
         for erosionLP in erosion:
             if 'lower0' == erosionLP[0]:
@@ -800,6 +802,8 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(discharges, durations, o
             LP_upper17.append(np.nan)
     
     erosionTable = pd.DataFrame({})
+    erosionTable['discharge'] = discharges
+    erosionTable['duration'] = durations
     for LP, LP_name in zip([LP_lower0, LP_lower1, LP_lower2, LP_lower3, LP_lower4, LP_lower5, LP_lower6, LP_lower7, LP_lower8, LP_lower9, LP_lower10, LP_lower11, LP_lower12, LP_lower13, LP_lower14, LP_lower15, LP_lower16, LP_lower17,
                             LP_upper0, LP_upper1, LP_upper2, LP_upper3, LP_upper4, LP_upper5, LP_upper6, LP_upper7, LP_upper8, LP_upper9, LP_upper10, LP_upper11, LP_upper12, LP_upper13, LP_upper14, LP_upper15, LP_upper16, LP_upper17],
                             ['lower0', 'lower1', 'lower2', 'lower3', 'lower4', 'lower5', 'lower6', 'lower7', 'lower8', 'lower9', 'lower10', 'lower11', 'lower12', 'lower13', 'lower14', 'lower15', 'lower16', 'lower17', 
