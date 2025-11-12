@@ -35,9 +35,9 @@ def readAllShotNumbersFromJuice(juicePath, safe='results/dischargeIDlistAll.csv'
             discharges.append(list(shot['shot'])[0])
             configurations.append(list(shot['configuration'])[0])
             durations.append(list(shot['t_shot_stop'])[0])
-            overviewTable.append('results/calculationTables/results_{discharge}.csv'.format(discharge=list(shot['shot'])[0][3:])) ####NEW, CAN CAUSE PROBLEMS
+            overviewTable.append('results/calculationTables/results_{discharge}.csv'.format(discharge=list(shot['shot'])[0][3:])) 
 
-        dischargeIDcsv = pd.DataFrame({'dischargeID':dischargeIDlist, 'configuration':configurations, 'duration':durations})
+        dischargeIDcsv = pd.DataFrame({'dischargeID':dischargeIDlist, 'configuration':configurations, 'duration':durations, 'overviewTable':overviewTable})
         dischargeIDcsv.to_csv(safe, sep=';')
         return dischargeIDcsv
 
@@ -451,93 +451,81 @@ def readMarkusData(settings_dict, interval, settings_Gao):
     return ne_values, Te_values, positions, data_Ts, t, S
 
 #######################################################################################################################################################################
-def readArchieveDB():
-    '''just example for using J. Brunners package w7xarchive to read data from ArchiveDB'''
+def readArchieveDB_ne_ECRH(dischargesCSV):
+    url = {'ECRH': 'Test/raw/W7X/CBG_ECRH/TotalPower_DATASTREAM/V1/0/Ptot_ECRH',
+           'ne': ''}
+    
+    for discharge in dischargesCSV['dischargeID']:
+        data = w7xarchive.get_signal_for_program(url, discharge[3:]) 
+        ne_time = data['ne'][0]
+        ne = data['ne'][1]
+        ECRH_time = data['ECRH'][0]
+        ECRH = data['ECRH'][1]
+        #now find steps in there and how long they take
+
+#######################################################################################################################################################################        
+def readArchiveDB():
+    #just example for using J. Brunners package w7xarchive to read ne and Te data from ArchiveDB
     shotnumbersOP1 = ['20181018.041']
     shotnumbersOP2 = ['20250424.050']
 
-    #for OP1.2
-    #Langmuir Probes, #numbersOP1 in range [1, 20]
-    divertorUnitsOP1 = ['lowerTestDivertorUnit', 'upperTestDivertorUnit']
-
-    #IR cameras
-
-    #for OP2
-    #Langmuir Probes, numbersOP2 in range [1, 14]
-    divertorUnitsOP2 = ['LowerDivertor', 'UpperDivertor']
-    #IR cameras
+    data_urls_OP2 = {'LP_ne':"ArchiveDB/raw/W7XAnalysis/QRP02_Langmuirprobes/{divertorUnit}_Probe_{number}_DATASTREAM/V1/1/Plasma_Density".format(divertorUnit=divertorUnitOP2, number=numberOP2),
+                     'LP_Te':"ArchiveDB/raw/W7XAnalysis/QRP02_Langmuirprobes/{divertorUnit}_Probe_{number}_DATASTREAM/V1/2/Electron_Temperature".format(divertorUnit=divertorUnitOP2, number=numberOP2)}
+    
+    data_urls_OP1 = {'LP_ne':"ArchiveDB/raw/Minerva/Minerva.ElectronDensity.QRP.{divertorUnit}.{number}/ne_DATASTREAM/V1/0/ne".format(divertorUnit=divertorUnitOP1, number=numberOP1),
+                     'LP_Te':"ArchiveDB/raw/Minerva/Minerva.ElectronTemperature.QRP.{divertorUnit}.{number}/Te_DATASTREAM/V1/0/Te".format(divertorUnit=divertorUnitOP1, number=numberOP1)}
+    
+    divertorUnitsOP1 = ['lowerTestDivertorUnit', 'upperTestDivertorUnit'] #for OP1.2 Langmuir Probes, #numbersOP1 in range [1, 20]
+    divertorUnitsOP2 = ['LowerDivertor', 'UpperDivertor'] #for OP2 Langmuir Probes, numbersOP2 in range [1, 14]
     
     for shotnumber in shotnumbersOP1:
         #for OP1
         for divertorUnitOP1 in divertorUnitsOP1:
             for numberOP1 in range(1, 2):#21):
                 #called like this time is in seconds from t1 (program start?)
-                data_urls_OP1 = {'LP_ne':"ArchiveDB/raw/Minerva/Minerva.ElectronDensity.QRP.{divertorUnit}.{number}/ne_DATASTREAM/V1/0/ne".format(divertorUnit=divertorUnitOP1, number=numberOP1),
-                                'LP_Te':"ArchiveDB/raw/Minerva/Minerva.ElectronTemperature.QRP.{divertorUnit}.{number}/Te_DATASTREAM/V1/0/Te".format(divertorUnit=divertorUnitOP1, number=numberOP1)}
                 #add error of the datastreams
 
                 #enables parallel download if data_urls_OP1 is dictionary
                 data_OP1 = w7xarchive.get_signal_for_program(data_urls_OP1, shotnumber) 
                 #data_OP1['LP_ne'][0] to access time trace of ne measurement, data_OP1['LP_ne'][1] to access ne data
                 #data_OP1['LP_Te'][0] to access time trace of Te measurement, data_OP1['LP_Te'][1]to access Te data
-                
-                #just to test if reading the data works properly
-                plt.figure()
-                plt.plot(data_OP1['LP_ne'][0], data_OP1['LP_ne'][1])
-                plt.plot(data_OP1['LP_Te'][0], data_OP1['LP_Te'][1])
-                plt.gca().set_xlabel("time [s]")
-                plt.gca().set_ylabel("data")
-                plt.show()
-                pass
-
+               
     for shotnumber in shotnumbersOP2:
         #for OP2
         for divertorUnitOP2 in divertorUnitsOP2:
             for numberOP2 in range(1, 2):#14):
                 #called like this time is in seconds from t1
-                data_urls_OP2 = {'LP_ne':"ArchiveDB/raw/W7XAnalysis/QRP02_Langmuirprobes/{divertorUnit}_Probe_{number}_DATASTREAM/V1/1/Plasma_Density".format(divertorUnit=divertorUnitOP2, number=numberOP2),
-                                'LP_Te':"ArchiveDB/raw/W7XAnalysis/QRP02_Langmuirprobes/{divertorUnit}_Probe_{number}_DATASTREAM/V1/2/Electron_Temperature".format(divertorUnit=divertorUnitOP2, number=numberOP2)}
-                #add error of the datastreams
-
-                data_OP2 = w7xarchive.get_signal_for_program(data_urls_OP2, shotnumber)
-                #just to test if reading the data works properly
-                
-                plt.figure()
-                plt.plot(data_OP2['LP_ne'][0], data_OP2['LP_ne'][1])
-                plt.plot(data_OP2['LP_Te'][0], data_OP2['LP_Te'][1])
-                plt.gca().set_xlabel("time [s]")
-                plt.gca().set_ylabel("data")
-                plt.show()
+                data_OP2 = w7xarchive.get_signal_for_program(data_urls_OP2, shotnumber)            
 
 #######################################################################################################################################################################
-def readAllShotNumbersFromLogbook(safe ='results/configurations/dischargeList_OP_223.csv'):
+def readAllShotNumbersFromLogbook(safe ='results/configurations/dischargeList_OP223.csv'):
     url = 'https://w7x-logbook.ipp-hgw.mpg.de/api/_search'
 
     # q = 'tags.diagnostic\ result:"raw\ data"'
     # !! Helium Hydrogen discharges werden hier nicht unterschieden
 
     #filter options
-    q1 = '!"Conditioning" AND '
-    q2 = '!"gas valve tests" AND '
-    q3 = '!"sniffer tests" AND '
+    q1 = '!"Conditioning" AND ' #e.g. Pulse Trains
+    q2 = '!"gas valve tests" AND '  #start of the day, no plasma present
+    q3 = '!"sniffer tests" AND '    #at the beginning of the day, no plasma present, just ECRH
     q4 = '!"reference discharge" AND '
     q41 = '"ReferenceProgram"'   # in OP2.1 does not work
-    q5 = '!"Open valves" AND '
+    q5 = '!"Open valves" AND '  #gas valves remain open after end of discharge
     q6 = 'id:XP_* AND tags.value:"ok" AND '
     q66 = 'id:XP_* AND '
     q71 = 'tags.value:"Reference"'  # for OP2.1
     q44 = '"reference discharge"'   # for OP2.2, OP2.3
     q45 = '"Reference discharge"'   # for OP1.2b
 
-    id, duration, configuration = [], [], []    #id stores dischargeIDs, duration their ECRH heating period duration, configuration theit configuration
+    id, duration, duration_DB, configuration, overviewTable = [], [], [], [], []    #id stores dischargeIDs, duration their ECRH heating period duration, configuration theit configuration
 
     for config in ['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
                 'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
                 'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520']:
 
         #filter for configurations (config)
-        q7 = 'tags.value:{config}'.format(config=config)
-
+        q7 = 'tags.value:"{config}"'.format(config=config)
+        print(q7)
         #apply neccessary filters
         q = q1 + q2 + q3 + q66 + q7  
 
@@ -553,20 +541,34 @@ def readAllShotNumbersFromLogbook(safe ='results/configurations/dischargeList_OP
             continue
 
         for discharge in res['hits']['hits']:
-            id.append(discharge['_id']) 
-
+            dischargeID = discharge['_id'][3:].split('.')
+            if len(dischargeID[1]) == 3:
+                dischargeID = dischargeID[0] + '.' + dischargeID[1]
+            elif len(dischargeID[1]) == 2:
+                dischargeID = dischargeID[0] + '.0' + dischargeID[1]
+            else:
+                dischargeID = dischargeID[0] + '.00' + dischargeID[1]
+            #id.append(dischargeID)
+            id.append(discharge['_id'])
+            overviewTable.append('results/calculationTables/results_{discharge}.csv'.format(discharge=dischargeID))
+     
             for tag in discharge['_source']['tags']: 
                 if 'catalog_id' in tag.keys():
                     if tag['catalog_id'] == '1#3':
                         duration.append(tag['ECRH duration'])
                         continue
-
+            
             if len(duration) != len(id):
                 duration.append(np.nan)
+            t = w7xarchive.get_program_from_to(discharge['_id'][3:]) #this returns the time from when first data streams become available (-61s before discharge start) till some time after the end of the discharge
+            #t1 = w7xarchive.get_program_t0(discharge['_id'][3:])
+            #t2 = w7xarchive.get_program_t1(discharge['_id'][3:])
+            #t = w7xarchive.get_program_triggerts
+            duration_DB.append((t[1] - t[0]) * 1e-9)
 
         configuration.append([config] * len(res['hits']['hits']))
 
-    dischargeTable = pd.DataFrame({'configuration': list(itertools.chain.from_iterable(configuration)), 'dischargeID': id, 'duration': duration})
+    dischargeTable = pd.DataFrame({'configuration': list(itertools.chain.from_iterable(configuration)), 'dischargeID': id, 'duration': duration, 'durationDB': duration_DB, 'overviewTable': overviewTable})
     dischargeTable.to_csv(safe, sep=';')
 
     return dischargeTable

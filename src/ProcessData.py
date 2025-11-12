@@ -1,7 +1,7 @@
 '''This file contains the functions neccessary for processing data from w7xArchieveDB/xdrive/downloaded files... and calculating erosion related quantities'''
 
 import itertools
-
+import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -473,6 +473,17 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
         returns updated overviewTable and overwrites old file with missing values
         adds columns "origin_ne", "origin_Te", "origin_Ts" with measured values having a "M" and intraploated an "I"
         ATTENTION: ALL ELEMENTS OF LPindices ARE STRINGS'''
+    
+    #create same timestamps for all LPs 
+    # -> avoid [0.87, 2.87, 4.87, 0, 0] for lower0 vs [0.87, 2.87, 4.87, 6.87, 8.87] for lower1, instead apply [0.87, 2.87, 4.87, 6.87, 8.87] to all
+    # -> guarantee that timesteps will be fitting and no negative timesteps occur and result in decreasing total layer thickness
+    
+    times = list(np.unique(overviewTable['time']))
+    if 0 in times:
+        times.remove(0)
+    times.sort()
+    times = [times] * len(LPindices)
+    times = np.hstack(np.array(times))
 
     for quantity_column in ['ne', 'Te', 'Ts']:
         quantity_list = []
@@ -488,9 +499,9 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
                         quantity_list.append(np.nan)
                     
                     else: #if first value is not also last value
-                        for counter, i in enumerate(range(index + 1, int(LPindices[-1][2]) + 1)):
+                        for i in range(index + 1, int(LPindices[-1][2]) + 1):
                             if overviewTable[quantity_column][i] != 0 and not np.isnan(overviewTable[quantity_column][i]):  #find existing value before hitting last index, append inbetween of last existing value and that value (according to number of missing values)
-                                quantity_list.append((quantity_list[index - 1] + overviewTable[quantity_column][i])/(counter + 2))
+                                quantity_list.append(overviewTable[quantity_column][i])
                                 break
 
                             elif str(i) in LPindices.T[2]: #last value is reached without finding an existing value, append nan
@@ -527,16 +538,13 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
             origin_Ts = quantity_origin
 
     #get time steps
-    timesteps = [overviewTable['time'][0]]
-    for j in range(1, len(overviewTable['time'][:int(LPindices[0][2]) + 1])):
-        timesteps.append(overviewTable['time'][j] - overviewTable['time'][j - 1])
+    timesteps = [times[0]] #[overviewTable['time'][0]]
+    for j in range(1, len(times[:int(LPindices[0][2]) + 1])):#len(overviewTable['time'][:int(LPindices[0][2]) + 1])):
+        timesteps.append(times[j] - times[j - 1])#overviewTable['time'][j] - overviewTable['time'][j - 1])
     timesteps = np.array(timesteps)
 
     #now calculate sputtering yields
     #Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = calculateErosionRelatedQuantitiesOnePosition(Te_list, Te_list, Ts_list, ne_list, timesteps, alpha, m_i, f_i, ions, k, n_target)
-    for list in [Te_list, Te_list, Ts_list, ne_list, timesteps]:
-        print(len(list))
-        print(list)
     
     Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness = [], [], [], [], [], []
 
@@ -554,6 +562,7 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
             erodedLayerThickness.append(return_erosion[7])
 
     #overwrite overviewTable file
+    overviewTable['time'] = times
     overviewTable['ne'] = np.hstack(ne_list)
     overviewTable['origin_ne'] = origin_ne
     overviewTable['Te'] = np.hstack(Te_list)
@@ -591,14 +600,28 @@ def calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overview
 
     #find last valid measurement (time < duration)
     if max(overviewTable['time']) > duration:
-        lastTime = [j > duration for j in overviewTable['time']].index(True) - 1
+        lastTimeIndex = [j > duration for j in overviewTable['time']].index(True) - 1
+        
+        if lastTimeIndex == - 1:
+            lastTimeIndex = 0
+
+        lastTime = overviewTable['time'][lastTimeIndex]
+
+        if lastTimeIndex > int(LPindices[0][2]): 
+            for i in range(len(LPindices)):
+                lastTimeIndex -= (1 + int(LPindices[0][2]))
+                if lastTimeIndex < 0:
+                    lastTimeIndex += (1 + int(LPindices[0][2]))
+                    break
+            
     else:
-        lastTime = int(LPindices[0][2])
+        lastTimeIndex = int(LPindices[0][2])
+        lastTime = overviewTable['time'][lastTimeIndex]
 
     for counter, LP in enumerate(LPindices):
-        lastTimeIndex = counter + lastTime
-        erosionDuringLP = overviewTable['totalErodedLayerThickness'][lastTimeIndex] #total eroded layer thickness for time interval until last LP measurement
-        erosionAfterLP = overviewTable['erosionRate'][lastTimeIndex] * (duration - overviewTable['time'][lastTimeIndex]) #total eroded layer thickness for time interval after last LP measurement, multiply last erosion rate with time step till end of discharge
+        lastTimeIndexCounter = counter * (1 + int(LPindices[0][2])) + lastTimeIndex
+        erosionDuringLP = overviewTable['totalErodedLayerThickness'][lastTimeIndexCounter] #total eroded layer thickness for time interval until last LP measurement
+        erosionAfterLP = overviewTable['erosionRate'][lastTimeIndexCounter] * (duration - lastTime) #overviewTable['time'][lastTimeIndex]) #total eroded layer thickness for time interval after last LP measurement, multiply last erosion rate with time step till end of discharge
         erosion.append([LP[0], erosionDuringLP + erosionAfterLP])
     
     return erosion
@@ -610,10 +633,20 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(discharges, durations, o
         returns 2D array of structure [[LP1, erosionLayer1], [LP2, erosionLayer2], ...]'''
     LP_lower0, LP_lower1, LP_lower2, LP_lower3, LP_lower4, LP_lower5, LP_lower6, LP_lower7, LP_lower8, LP_lower9, LP_lower10, LP_lower11, LP_lower12, LP_lower13, LP_lower14, LP_lower15, LP_lower16, LP_lower17 = [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [] 
     LP_upper0, LP_upper1, LP_upper2, LP_upper3, LP_upper4, LP_upper5, LP_upper6, LP_upper7, LP_upper8, LP_upper9, LP_upper10, LP_upper11, LP_upper12, LP_upper13, LP_upper14, LP_upper15, LP_upper16, LP_upper17 = [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []
-    lower = [False] * 18
-    upper = [False] * 18
+    dischargeList, durationList = [], []
     for discharge, duration, overviewTable in zip(discharges, durations, overviewTables):
+        lower = [False] * 18
+        upper = [False] * 18
+
         discharge = discharge[3:]
+        
+        if not os.path.isfile(overviewTable):
+            continue
+        
+        print(discharge)
+        dischargeList.append(discharge)
+        durationList.append(duration)
+
         overviewTable = pd.read_csv(overviewTable, sep=';')
         erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated)
         for erosionLP in erosion:
@@ -800,14 +833,31 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(discharges, durations, o
             LP_upper16.append(np.nan)   
         if not upper[17]:
             LP_upper17.append(np.nan)
+    print(len(durationList), len(dischargeList), len(LP_lower0))
     
     erosionTable = pd.DataFrame({})
-    erosionTable['discharge'] = discharges
-    erosionTable['duration'] = durations
+    erosionTable['discharge'] = dischargeList
+    erosionTable['duration'] = durationList
     for LP, LP_name in zip([LP_lower0, LP_lower1, LP_lower2, LP_lower3, LP_lower4, LP_lower5, LP_lower6, LP_lower7, LP_lower8, LP_lower9, LP_lower10, LP_lower11, LP_lower12, LP_lower13, LP_lower14, LP_lower15, LP_lower16, LP_lower17,
                             LP_upper0, LP_upper1, LP_upper2, LP_upper3, LP_upper4, LP_upper5, LP_upper6, LP_upper7, LP_upper8, LP_upper9, LP_upper10, LP_upper11, LP_upper12, LP_upper13, LP_upper14, LP_upper15, LP_upper16, LP_upper17],
                             ['lower0', 'lower1', 'lower2', 'lower3', 'lower4', 'lower5', 'lower6', 'lower7', 'lower8', 'lower9', 'lower10', 'lower11', 'lower12', 'lower13', 'lower14', 'lower15', 'lower16', 'lower17', 
                              'upper0', 'upper1', 'upper2', 'upper3', 'upper4', 'upper5', 'upper6', 'upper7', 'upper8', 'upper9', 'upper10', 'upper11', 'upper12', 'upper13', 'upper14', 'upper15', 'upper16', 'upper17']):
         erosionTable[LP_name] = LP
     erosionTable.to_csv('results/totalErosionAtPosition.csv', sep=';')
-            
+
+#######################################################################################################################################################################        
+def calculateTotalErodedLayerThicknessWholeCampaign(erosionTable='results/totalErosionAtPosition.csv', campaign='results/configurationRuntimes.csv'):
+    #wenn ich die ihm nach konfiguration getrennt gebe, kann ich das so machen, aber total time muss er aus campaign lesen
+    erosionTable = pd.read_csv(erosionTable, sep=';')
+    LP, erosion_knownData, totalErosion, time_knownData, totalTime = [], [], [], [], []
+    for key in erosionTable.keys():
+        if 'lower' in key or 'upper' in key:
+            LP.append(key)
+            erosion_knownData.append(np.nansum(erosionTable[key]))
+            totalTime.append(np.nansum(erosionTable['duration']))
+            nan = np.array([np.isnan(i) for i in erosionTable[key]])
+            time_knownData.append(np.nansum(np.array(erosionTable['duration'])[nan]))
+            totalErosion.append(erosion_knownData[-1] * time_knownData[-1]/totalTime[-1])
+    erosion = pd.DataFrame({'LP': LP, 'duration_known (s)': time_knownData, 'duration_total (s)': totalTime, 'erosion_known (m)': erosion_knownData, 'erosion_extrapolated (m)': totalErosion})
+    erosion.to_csv('results/totalErosionAtPositionWholeCampaign.csv', sep=';')
+

@@ -68,10 +68,10 @@ juicePath = [r"\\share\groups\E3\Diagnostik\DIA-3\QRH_PWI\experiment_analysis\BA
              r"\\share\groups\E3\Diagnostik\DIA-3\QRH_PWI\experiment_analysis\BA Lisa Steiniger\Programmes\PythonScript_LisaSteiniger\BachelorthesisCode\inputFiles\Juice\adb_juice_op23_step_0.2_v0.6_redux.csv"]
 
 #dischargeID
-discharges = read.readAllShotNumbersFromLogbook #for all discharges filtered by Dirk logbook_search, adjust filters directly in function
+discharges = read.readAllShotNumbersFromLogbook() #for all discharges filtered by Dirk logbook_search, adjust filters directly in function
 read.getRuntimePerConfiguration(discharges)
 
-discharges = read.readAllShotNumbersFromJuice(juicePath) #samples all discharge IDs from juice files under "juicePath", their configuration and duration, rerurned as dictoinary with keys 'dischargeID', 'configuration', 'duration'
+#discharges = read.readAllShotNumbersFromJuice(juicePath) #samples all discharge IDs from juice files under "juicePath", their configuration and duration, rerurned as dictoinary with keys 'dischargeID', 'configuration', 'duration'
 dischargeIDs = discharges['dischargeID']
 
 #dischargeIDs = ['W7X20241001.046', 'W7X20250304.086']#W7X20241022.046']   #20241127.034' #manually
@@ -93,18 +93,24 @@ run = False
 
 #######################################################################################################################################################################
 #PROGRAM CODE FOR OP2 DISCHARGE GIVEN AS "DISCHARGE"
-if not run:
-    exit()
 
-discharge = ['20241022.049']
-dischargeIndex = list(dischargeIDs).index('W7X' + discharge[0])
-duration = [discharges['duration'][dischargeIndex]]
-overviewTable = [pd.read_csv('results/calculationTables/results_{discharge}.csv'.format(discharge=discharge[0]), sep=';')]
-LPindices = process.findIndexLP(overviewTable)
+#discharge = ['20241022.050']
+#dischargeIndex = list(dischargeIDs).index('W7X' + discharge[0])
+#durations = [discharges['duration'][dischargeIndex]]
+#overviewTables = [discharges['overviewTable'][dischargeIndex]]
+#overviewTable = [pd.read_csv('results/calculationTables/results_{discharge}.csv'.format(discharge=discharge[0]), sep=';')]
+#LPindices = process.findIndexLP(overviewTable)
 #print(LPindices)
 #overviewTable = process.intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_i, ions, k, n_target)
 #erosion = process.calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated=False)
-process.calculateTotalErodedLayerThicknessSeveralDischarges(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated=False)
+#discharge = ['W7X20241022.050']
+#discharges = discharges[700:701]
+#process.calculateTotalErodedLayerThicknessSeveralDischarges(discharge, durations, overviewTables, alpha, m_i, f_i, ions, k, n_target, intrapolated=False)
+#process.calculateTotalErodedLayerThicknessSeveralDischarges(discharges['dischargeID'], discharges['duration'], discharges['overviewTable'], alpha, m_i, f_i, ions, k, n_target, intrapolated=True)
+process.calculateTotalErodedLayerThicknessWholeCampaign()
+
+if not run:
+    exit()
 
 if __name__ == '__main__':
     #_lower indicates lower divertor unit, _upper upper divertor unit
