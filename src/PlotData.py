@@ -3,7 +3,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness, dt, safe):
+def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness, depositionRate_dt, depositedLayerThickness, dt, safe):
     ''' plot sputtering yields, erosion rate, total eroded layer thickness, and electron temperature, surface temperature, density over time for one discharge and one langmuir probe
         all input parameters besides "safe" should be provided as 1D lists/arrays representing measurement/calculation values at one position/langmuir probe over the same number of timesteps
         "safe" is a string determining where to save the plot and under which name, e.g. 'results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)'''
@@ -31,6 +31,9 @@ def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickn
     #third subplot for resulting erosion rates and layer thicknesses
     ax[2].plot(np.array(dt)[filter], np.array(erosionRate_dt)[filter] * 1e9, '-x', label=' $\Delta_{ero}/t$')
     ax[2].plot(np.array(dt)[filter], np.array(erodedLayerThickness)[filter] * 1e9, '-x', label=' $\Delta_{ero}$')
+    ax[2].plot(np.array(dt)[filter], np.array(depositionRate_dt)[filter] * 1e9, '-x', label=' $\Delta_{dep}/t$')
+    ax[2].plot(np.array(dt)[filter], np.array(depositedLayerThickness)[filter] * 1e9, '-x', label=' $\Delta_{dep}$')
+    ax[2].plot(np.array(dt)[filter], (np.array(erodedLayerThickness)[filter] - np.array(depositedLayerThickness)[filter]) * 1e9, '-x', label=' $\Delta_{ero, net}$')
 
     ax[0].set_yscale('log')
     ax[1].set_yscale('log')
@@ -41,7 +44,7 @@ def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickn
 
     ax[0].set_ylabel('Plasma density $n_e$ (x 1e18 1/m$^3$)\nElectron temperature $T_e$ (eV)\nSurface temperature $T_s$ (K)')
     ax[1].set_ylabel('Sputtering yields Y')
-    ax[2].set_ylabel('\nErosion rate $\Delta_{ero}/t$ (nm/s)\nTotal eroded layer thickness  $\Delta_{ero}$ (nm)')
+    ax[2].set_ylabel('\nErosion rate $\Delta_{ero}/t$ (nm/s)\nTotal eroded layer thickness  $\Delta_{ero}$ (nm)\nDeposition rate $\Delta_{dep}/t$ (nm/s)\nTotal deposited layer thickness  $\Delta_{dep}$ (nm)\nNet erosion layer thickness  $\Delta_{ero, net}$ (nm)\n')
     
     ax[0].grid(which='both')
     ax[1].grid(which='both')

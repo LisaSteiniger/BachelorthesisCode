@@ -52,7 +52,7 @@ E_ths_chem = [2, 1, 1]      #threshold energy for Y_surf
 E_th_chem=[31, 27, 29]   
 
 #target density in [1/m^3]
-n_target = 11.3*1e28 #nonsense value?
+n_target = 9.526*1e28 #for rho=1.9 g/cm^3
 
 #Parameters for net erosion specifically for divertor
 lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
@@ -63,6 +63,125 @@ lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
 #incident angle in rad
 alpha = 2 * np.pi/9
 
+configurations = ['DBM000-2520']#, 'EIM000+2620', 'FTM004-2520', 'FTM000+2620']
+#['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
+                  #'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
+                  #'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520']
+#done: 'XIM001+2485', none 'KTM000+2520', none 'MMG000+2520', none 'KOF000+2520', 'IKJ000+2520', none 'AIM000+2520', none 'DKJ000+2520', none 'FMM002+2520', none 'FMM002-2520', 
+#done: 'DBM000+2520', 'DBM000-2520', none 'FTM000-2620', 'FTM004+2520', 'FTM004+2585', none 'FTM000+2620', none 'KJM008-2520', 'KJM008-2620',  
+#done: 'EIM000-2520', 'EIM000-2620', 'EIM000+2620', 'EIM000+2614', 'EIM000+2520', 'KJM008+2520', 'KJM008+2620', 'FTM004-2520'
+
+run = True
+
+#######################################################################################################################################################################
+#HERE IS THE RUNNING PROGRAM
+
+if not run:
+    exit()
+
+if __name__ == '__main__':
+    LP_position = ''
+    for configuration in configurations:
+        
+        discharges = read.readAllShotNumbersFromLogbook(configuration)
+        if type(discharges) == str:
+            continue
+        
+        #_lower indicates lower divertor unit, _upper upper divertor unit
+        
+        #read langmuir probe positions in [m] from pumping gap
+        #index 0 - 5 are langmuir probes on TM2h, 6 - 13 on TM3h, 14 - 17 on TM8h (distance from pumping gap is increasing)
+        LP_position = [OP2_TM2Distances]
+        LP_position.append(OP2_TM3Distances)
+        LP_position.append(OP2_TM8Distances)
+        LP_position = list(itertools.chain.from_iterable(LP_position)) #flattens to 1D list
+        
+        
+        not_workingLP, not_workingIR, not_workingTrigger = [], [], []
+        for counter, discharge in enumerate(discharges['dischargeID'][:]):
+            
+            #tests if data was already read out and saved, in that case reading data is skipped for the discharge in question
+            if os.path.isfile('results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)):
+                continue
+            
+            #in case that data for this discharge was not read before
+
+            #read Langmuir Probe data from xdrive
+            #all arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
+            #ne in [1/m^3], Te in [eV] and assumption that Te=Ti, t in [s]
+            #index represent the active LPs on each divertor unit
+            return_LP = read.readLangmuirProbeDataFromXdrive(discharge)
+            if type(return_LP) == str:
+                not_workingLP.append([discharge, counter])
+                continue
+            
+            ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper, index_lower, index_upper = return_LP
+
+            #all Langmuir Probes measure at the same times but some will stop earlier than others 
+            #-> time_array holds all times that are represented in one discharge at any LP
+            time_array = []
+            for t_divertorUnit in [t_lower, t_upper]:
+                for t_position in t_divertorUnit:
+                    for t in t_position:
+                        if t not in time_array:
+                            time_array.append(t)
+            time_array.sort()
+            #print(time_array)
+            
+            #read IRcam data for both divertor units
+            #index represent the active LPs on each divertor unit
+            #Ts in [K], LP_position in [m] from pumping gap, time_array in [s]
+            return_IR = read.readSurfaceTemperatureFramesFromIRcam(discharge, time_array, ['lower', 'upper'], LP_position, [index_lower, index_upper])
+            if type(return_IR) == str:
+                if return_IR == 'No IRcam stream for any time in discharge':
+                    not_workingIR.append([discharge, counter])
+                else:
+                    not_workingTrigger.append([discharge, counter])
+                continue
+            Ts_lower, Ts_upper = return_IR
+            
+            #missing measurement times and values are replaced by adding arrays of 0 to guarantee same data structure of all arrays concerning t, Te, Ts, ne
+            for j in range(len(ne_lower)):
+                for i in range(len(time_array) - len(ne_lower[j])):
+                    ne_lower[j].append(0)
+                    Te_lower[j].append(0)
+                    t_lower[j].append(0)
+            for j in range(len(ne_upper)):
+                for i in range(len(time_array) - len(ne_upper[j])):
+                    ne_upper[j].append(0)
+                    Te_upper[j].append(0)
+                    t_upper[j].append(0)
+
+            Te_lower = np.array(Te_lower)
+            Te_upper = np.array(Te_upper)
+            ne_lower = np.array(ne_lower)
+            ne_upper = np.array(ne_upper)
+            t_lower = np.array(t_lower)
+            t_upper = np.array(t_upper)
+            #print(np.shape(Ts_lower), np.shape(Ts_upper), np.shape(ne_upper), np.shape(ne_lower), np.shape(Te_upper), np.shape(Te_lower))
+
+            #calculate sputtering related physical quantities (sputtering yields, erosion rates, layer thicknesses)
+            #all arrays of ndim=2 with each line representing measurements over time at one LP probe positions (=each column representing measurements at all positions at one time)
+            #ne in [1/m^3], Te in [eV] and assumption that Te=Ti, t in [s], Ts in [K], alpha in [rad], LP_position in [m] from pumping gap, m in [kg], k in [eV/K], n_target in [1/m^3]
+            #does not return something but writes measurement values and calculated values to 'results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)
+            #plots are saved in safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=divertorUnit, position=position)
+            process.processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, index_lower, index_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, True)
+
+        #print(not_workingTrigger, not_workingLP, not_workingIR)
+        
+        #intrapolate missing values, calculate total eroded layer thickness
+        erosionTable = process.calculateTotalErodedLayerThicknessSeveralDischarges(configuration, discharges['dischargeID'], discharges['duration'], discharges['overviewTable'], alpha, m_i, f_i, ions, k, n_target, intrapolated=False)
+        
+        print(process.calculateTotalErodedLayerThicknessWholeCampaignPerConfig(configuration))
+    
+    if type(LP_position) != str:
+        process.calculateTotalErodedLayerThicknessWholeCampaign(configurations, LP_position)    
+
+#configuration percentages of total runtime in OP2.2/2.3
+read.getRuntimePerConfiguration()
+
+
+'''
 #juice files saved under followig paths for OP2.2/2.3
 juicePath = [r"\\share\groups\E3\Diagnostik\DIA-3\QRH_PWI\experiment_analysis\BA Lisa Steiniger\Programmes\PythonScript_LisaSteiniger\BachelorthesisCode\inputFiles\Juice\adb_juice_op22_step_0.2_v0.5_redux.csv",
              r"\\share\groups\E3\Diagnostik\DIA-3\QRH_PWI\experiment_analysis\BA Lisa Steiniger\Programmes\PythonScript_LisaSteiniger\BachelorthesisCode\inputFiles\Juice\adb_juice_op23_step_0.2_v0.6_redux.csv"]
@@ -200,7 +319,7 @@ if __name__ == '__main__':
 #Warning from GitBash when heatflux code was added: LF will be replaced by CRLF the next time Git touches it
 #######################################################################################################################################################################
 #read data from archieveDB
-
+'''
 #######################################################################################################################################################################
 #######################################################################################################################################################################
 #references for look-up values

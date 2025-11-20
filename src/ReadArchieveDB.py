@@ -35,14 +35,14 @@ def readAllShotNumbersFromJuice(juicePath, safe='results/dischargeIDlistAll.csv'
             discharges.append(list(shot['shot'])[0])
             configurations.append(list(shot['configuration'])[0])
             durations.append(list(shot['t_shot_stop'])[0])
-            overviewTable.append('results/calculationTables/results_{discharge}.csv'.format(discharge=list(shot['shot'])[0][3:])) 
+            overviewTable.append('results/calculationTables/results_{discharge}.csv'.format(discharge=list(shot['shot'])[0][3:])) ####NEW, CAN CAUSE PROBLEMS
 
         dischargeIDcsv = pd.DataFrame({'dischargeID':dischargeIDlist, 'configuration':configurations, 'duration':durations, 'overviewTable':overviewTable})
         dischargeIDcsv.to_csv(safe, sep=';')
         return dischargeIDcsv
 
 #######################################################################################################################################################################
-def getRuntimePerConfiguration(dischargeIDcsv, safe='results/configurationRuntimes.csv'):
+def getRuntimePerConfigurationOld(dischargeIDcsv, safe='results/configurationRuntimes.csv'):
     ''' This function determines the absolute and relative runtime of each configuration over all discharges given by "dischargeIDcsv" and writes them as .csv file to safe'''
     configurations = list(np.unique(dischargeIDcsv['configuration']))
     configurations = list(np.unique([x[:3] for x in configurations]))
@@ -60,6 +60,48 @@ def getRuntimePerConfiguration(dischargeIDcsv, safe='results/configurationRuntim
         relativeRuntimes.append(runtime/totalRuntime * 100)
         absoluteNumberOfDischarges.append(sum(filter))
         relativeNumberOfDischarges.append((sum(filter)/totalNumber) * 100)
+
+    configurations.append('all')
+    absoluteRuntimes.append(totalRuntime)
+    relativeRuntimes.append(100)
+    absoluteNumberOfDischarges.append(totalNumber)
+    relativeNumberOfDischarges.append(100)
+
+    runtimes['configuration'] = configurations
+    runtimes['absolute number of discharges'] = absoluteNumberOfDischarges
+    runtimes['relative number of discharges (%)'] = relativeNumberOfDischarges
+    runtimes['absolute runtime (s)'] = absoluteRuntimes
+    runtimes['relative runtime (%)'] = relativeRuntimes
+    runtimes = runtimes.sort_values('absolute runtime (s)')
+
+    runtimes.to_csv(safe, sep=';')
+
+#######################################################################################################################################################################
+def getRuntimePerConfiguration(dischargeIDcsv='results/configurations/dischargeList_OP223_', safe='results/configurationRuntimes.csv', 
+                               configurations=['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
+                                               'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
+                                               'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520']):
+    ''' This function determines the absolute and relative runtime of each configuration over all discharges given by "dischargeIDcsv" and writes them as .csv file to safe'''
+
+    runtimes = pd.DataFrame({})
+    absoluteRuntimes, relativeRuntimes, absoluteNumberOfDischarges, relativeNumberOfDischarges = [], [], [], []
+    totalRuntime = 0#np.nansum(dischargeIDcsv['duration'])
+    totalNumber = 0#len(dischargeIDcsv['duration'])
+
+    for configuration in configurations:
+        if not os.path.isfile(dischargeIDcsv + configuration + '.csv'):
+            absoluteRuntimes.append(0)
+            absoluteNumberOfDischarges.append(0)
+        else:
+            dischargeList = pd.read_csv(dischargeIDcsv + configuration + '.csv', sep=';')
+            absoluteRuntimes.append(np.nansum(dischargeList['duration']))
+            absoluteNumberOfDischarges.append(len(dischargeList['dischargeID']))
+        totalRuntime += absoluteRuntimes[-1]
+        totalNumber += absoluteNumberOfDischarges[-1]
+
+    for runtime, number in zip(absoluteRuntimes, absoluteNumberOfDischarges):
+        relativeRuntimes.append(runtime/totalRuntime * 100)
+        relativeNumberOfDischarges.append((number/totalNumber) * 100)
 
     configurations.append('all')
     absoluteRuntimes.append(totalRuntime)
@@ -464,7 +506,7 @@ def readArchieveDB_ne_ECRH(dischargesCSV):
         #now find steps in there and how long they take
 
 #######################################################################################################################################################################        
-def readArchiveDB():
+def readArchieveDB():
     #just example for using J. Brunners package w7xarchive to read ne and Te data from ArchiveDB
     shotnumbersOP1 = ['20181018.041']
     shotnumbersOP2 = ['20250424.050']
@@ -498,78 +540,67 @@ def readArchiveDB():
                 data_OP2 = w7xarchive.get_signal_for_program(data_urls_OP2, shotnumber)            
 
 #######################################################################################################################################################################
-def readAllShotNumbersFromLogbook(safe ='results/configurations/dischargeList_OP223.csv'):
+def readAllShotNumbersFromLogbook(config, safe ='results/configurations/dischargeList_OP223_', overviewTableLink='results/calculationTables/results_'):
     url = 'https://w7x-logbook.ipp-hgw.mpg.de/api/_search'
 
     # q = 'tags.diagnostic\ result:"raw\ data"'
     # !! Helium Hydrogen discharges werden hier nicht unterschieden
 
     #filter options
-    q1 = '!"Conditioning" AND ' #e.g. Pulse Trains
-    q2 = '!"gas valve tests" AND '  #start of the day, no plasma present
-    q3 = '!"sniffer tests" AND '    #at the beginning of the day, no plasma present, just ECRH
+    q1 = '!"Conditioning" AND '
+    q2 = '!"gas valve tests" AND '
+    q3 = '!"sniffer tests" AND '
     q4 = '!"reference discharge" AND '
     q41 = '"ReferenceProgram"'   # in OP2.1 does not work
-    q5 = '!"Open valves" AND '  #gas valves remain open after end of discharge
+    q5 = '!"Open valves" AND '
     q6 = 'id:XP_* AND tags.value:"ok" AND '
     q66 = 'id:XP_* AND '
     q71 = 'tags.value:"Reference"'  # for OP2.1
     q44 = '"reference discharge"'   # for OP2.2, OP2.3
     q45 = '"Reference discharge"'   # for OP1.2b
+    qNBI = 'tags.value:"NBI source 7" OR tags.value:"NBI source 8" AND'
+    #filter for configurations (config)
+    q7 = 'tags.value:"{config}"'.format(config=config)
 
-    id, duration, duration_DB, configuration, overviewTable = [], [], [], [], []    #id stores dischargeIDs, duration their ECRH heating period duration, configuration theit configuration
+    #apply neccessary filters
+    q = q1 + q2 + q3 + q7 
+    
+    p = {'time':'[2024 TO 2025]', 'size':'9999', 'q' : q }   # OP2.2 and OP2.3
+    # p = {'time':op_phase, 'size':'9999', 'q' : q }
+    # p = {'time':'[2018 TO 2018]', 'size':'9999', 'q' : q }   # OP1.2b
+    # p = {'time':'[2022 TO 2023]', 'size':'9999', 'q' : q }   # OP2.1
 
-    for config in ['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
-                'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
-                'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520']:
+    id, duration, overviewTables = [], [], []    #id stores dischargeIDs, duration their ECRH heating period duration, configuration theit configuration
 
-        #filter for configurations (config)
-        q7 = 'tags.value:"{config}"'.format(config=config)
-        print(q7)
-        #apply neccessary filters
-        q = q1 + q2 + q3 + q66 + q7  
+    res = requests.get(url, params=p).json()
 
-        # p = {'time':op_phase, 'size':'9999', 'q' : q }
-        # p = {'time':'[2018 TO 2018]', 'size':'9999', 'q' : q }   # OP1.2b
-        # p = {'time':'[2022 TO 2023]', 'size':'9999', 'q' : q }   # OP2.1
-        p = {'time':'[2024 TO 2025]', 'size':'9999', 'q' : q }   # OP2.2 and OP2.3
-        
-        res = requests.get(url, params=p).json()
+    if res['hits']['total']==0:
+        print('no discharges found')
+        return 'no discharges found'
 
-        if res['hits']['total']==0:
-            print('no discharges found')
-            continue
+    for discharge in res['hits']['hits']:
+        dischargeID = discharge['_id'].split('.')
+        if len(dischargeID[1]) == 3:
+            dischargeID = dischargeID[0][3:] + '.' + dischargeID[1]
+        elif len(dischargeID[1]) == 2:
+            dischargeID = dischargeID[0][3:] + '.0' + dischargeID[1]
+        else:
+            dischargeID = dischargeID[0][3:] + '.00' + dischargeID[1]
+        id.append(dischargeID) 
+        overviewTables.append(overviewTableLink + dischargeID + '.csv')
+        for tag in discharge['_source']['tags']: 
+            if 'catalog_id' in tag.keys():
+                if tag['catalog_id'] == '1#3':
+                    duration.append(tag['ECRH duration'])
+                    continue
 
-        for discharge in res['hits']['hits']:
-            dischargeID = discharge['_id'][3:].split('.')
-            if len(dischargeID[1]) == 3:
-                dischargeID = dischargeID[0] + '.' + dischargeID[1]
-            elif len(dischargeID[1]) == 2:
-                dischargeID = dischargeID[0] + '.0' + dischargeID[1]
-            else:
-                dischargeID = dischargeID[0] + '.00' + dischargeID[1]
-            #id.append(dischargeID)
-            id.append(discharge['_id'])
-            overviewTable.append('results/calculationTables/results_{discharge}.csv'.format(discharge=dischargeID))
-     
-            for tag in discharge['_source']['tags']: 
-                if 'catalog_id' in tag.keys():
-                    if tag['catalog_id'] == '1#3':
-                        duration.append(tag['ECRH duration'])
-                        continue
-            
-            if len(duration) != len(id):
-                duration.append(np.nan)
-            t = w7xarchive.get_program_from_to(discharge['_id'][3:]) #this returns the time from when first data streams become available (-61s before discharge start) till some time after the end of the discharge
-            #t1 = w7xarchive.get_program_t0(discharge['_id'][3:])
-            #t2 = w7xarchive.get_program_t1(discharge['_id'][3:])
-            #t = w7xarchive.get_program_triggerts
-            duration_DB.append((t[1] - t[0]) * 1e-9)
+        if len(duration) != len(id):
+            duration.append(np.nan)
 
-        configuration.append([config] * len(res['hits']['hits']))
+    configuration = [config] * len(res['hits']['hits'])
 
-    dischargeTable = pd.DataFrame({'configuration': list(itertools.chain.from_iterable(configuration)), 'dischargeID': id, 'duration': duration, 'durationDB': duration_DB, 'overviewTable': overviewTable})
-    dischargeTable.to_csv(safe, sep=';')
+    dischargeTable = pd.DataFrame({'configuration': configuration, 'dischargeID': id, 'duration': duration, 'overviewTable': overviewTables})
+    dischargeTable.to_csv(safe + config + '.csv', sep=';')
 
     return dischargeTable
 

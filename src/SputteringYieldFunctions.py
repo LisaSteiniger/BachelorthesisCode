@@ -342,6 +342,16 @@ def calculateErosionRate(Y, flux, n_target):
 def calculateDeltaErodedLayer(Y, flux, t_discharge, n_target):                                                               
     return sum(Y * flux * t_discharge/n_target)
 
+#Calculation of deposition rate of graphite (incoming C-ions stick with 100% probability), provide flux in [1/(s*m^2)], n_target in [1/m^3]
+#flux must be number representing incident particle flux of C ions
+def calculateDepositionRate(flux, n_target):
+    return flux/n_target
+
+#Calculation of layer thickness of graphite that has been deposited (incoming C-ions stick with 100% probability), provide flux in [1/(s*m^2)], n_target in [1/m^3], t_discharge in [s]
+#flux must be number representing incident particle flux of C ions
+def calculateDepositionLayerThickness(flux, t_discharge, n_target):
+    return flux * t_discharge/n_target
+
 #Calculation of gross flux of eroded particles (redeposition not considered), provide flux in [1/(s*m^2)], Y and f must be np.arrays for all relevant erosion processes
 def calculateFluxErodedParticlesGross(flux_electron, Y, f, P_redeposition, stickingCoefficient, Y_selfSputtering):                                                          
     return (flux_electron * np.sum(Y * f))/(1 - P_redeposition * (Y_selfSputtering + 1 - stickingCoefficient))
