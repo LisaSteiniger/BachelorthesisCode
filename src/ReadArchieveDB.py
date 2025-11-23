@@ -77,10 +77,10 @@ def getRuntimePerConfigurationOld(dischargeIDcsv, safe='results/configurationRun
     runtimes.to_csv(safe, sep=';')
 
 #######################################################################################################################################################################
-def getRuntimePerConfiguration(dischargeIDcsv='results/configurations/dischargeList_OP223_', safe='results/configurationRuntimes.csv', 
-                               configurations=['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
+def getRuntimePerConfiguration(configurations=['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
                                                'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
-                                               'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520']):
+                                               'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520'],
+                                               dischargeIDcsv='results/configurations/dischargeList_OP223_', safe='results/configurations/configurationRuntimes.csv'):
     ''' This function determines the absolute and relative runtime of each configuration over all discharges given by "dischargeIDcsv" and writes them as .csv file to safe'''
 
     runtimes = pd.DataFrame({})

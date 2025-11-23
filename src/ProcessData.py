@@ -488,7 +488,7 @@ def findIndexLP(overviewTable):
     return np.array([LPs, indexLPfirst, sorted(indexLPlast)]).T #ATTENTION: ALL ELEMENTS ARE STRINGS
 
 #######################################################################################################################################################################
-def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_i, ions, k, n_target):
+def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_i, ions, k, n_target, plotting=False):
     ''' intrapolates missing values in electron density ne, electron temperature Te, and surface temperature Ts linearly
         calculates sputtering yields, erosion rates, and layer thicknesses
         returns updated overviewTable and overwrites old file with missing values
@@ -571,7 +571,7 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
     
     Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness, depositionRate_dt, depositedLayerThickness_dt, depositedLayerThickness = [], [], [], [], [], [], [], [], []
 
-    for T_e, T_i, T_s, n_e in zip(Te_list, Te_list, Ts_list, ne_list):
+    for T_e, T_i, T_s, n_e, LPindex in zip(Te_list, Te_list, Ts_list, ne_list, LPindices):
         return_erosion = calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, m_i, f_i, ions, k, n_target)
         if type(return_erosion) == str:
             print(return_erosion)
@@ -586,6 +586,12 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
             depositionRate_dt.append(return_erosion[8])
             depositedLayerThickness_dt.append(return_erosion[9])
             depositedLayerThickness.append(return_erosion[10])
+            #plotting not tested yet
+            if plotting==True:   
+                safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=LPindex[0][:5], position=LPindex[0][5:])
+                plot.plotOverview(n_e, T_e, T_s, return_erosion[0], return_erosion[3], return_erosion[4], 
+                                  return_erosion[5], return_erosion[7], return_erosion[8], return_erosion[10], times, safe)
+    
 
     #overwrite overviewTable file
     overviewTable['time'] = times
@@ -876,13 +882,17 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(config, discharges, dura
                             LP_upper0, LP_upper1, LP_upper2, LP_upper3, LP_upper4, LP_upper5, LP_upper6, LP_upper7, LP_upper8, LP_upper9, LP_upper10, LP_upper11, LP_upper12, LP_upper13, LP_upper14, LP_upper15, LP_upper16, LP_upper17],
                             ['lower0', 'lower1', 'lower2', 'lower3', 'lower4', 'lower5', 'lower6', 'lower7', 'lower8', 'lower9', 'lower10', 'lower11', 'lower12', 'lower13', 'lower14', 'lower15', 'lower16', 'lower17', 
                              'upper0', 'upper1', 'upper2', 'upper3', 'upper4', 'upper5', 'upper6', 'upper7', 'upper8', 'upper9', 'upper10', 'upper11', 'upper12', 'upper13', 'upper14', 'upper15', 'upper16', 'upper17']):
-        erosionTable[LP_name + '_erosion'] = np.array(LP).T[0]
-        erosionTable[LP_name + '_deposition'] = np.array(LP).T[1]
-    erosionTable.to_csv('results/totalErosionAtPosition_{config}.csv'.format(config=config), sep=';')
+        if LP != []:
+            erosionTable[LP_name + '_erosion'] = np.array(LP).T[0]
+            erosionTable[LP_name + '_deposition'] = np.array(LP).T[1]
+        else:
+            erosionTable[LP_name + '_erosion'] = 0
+            erosionTable[LP_name + '_deposition'] = 0
+    erosionTable.to_csv('results/erosionMeasuredConfig/totalErosionAtPosition_{config}.csv'.format(config=config), sep=';')
     return erosionTable
 
 #######################################################################################################################################################################        
-def calculateTotalErodedLayerThicknessWholeCampaignPerConfig(config, erosionTable='results/totalErosionAtPosition_', dischargeOverview = 'results/configurations/dischargeList_OP223'):
+def calculateTotalErodedLayerThicknessWholeCampaignPerConfig(config, erosionTable='results/erosionMeasuredConfig/totalErosionAtPosition_', dischargeOverview = 'results/configurations/dischargeList_OP223'):
     if not os.path.isfile(erosionTable + '{config}.csv'.format(config=config)) or not os.path.isfile(dischargeOverview + '_{config}.csv'.format(config=config)):
         return 'file missing for ' + config
     
@@ -920,11 +930,11 @@ def calculateTotalErodedLayerThicknessWholeCampaignPerConfig(config, erosionTabl
                             'erosion_total (m)': erosion_total,
                             'deposition_total (m)': deposition_total,
                             'netErosion_total (m)': np.array(erosion_total) - np.array(deposition_total)})
-    erosion.to_csv('results/totalErosionAtPositionWholeCampaign_{config}.csv'.format(config=config), sep=';')
+    erosion.to_csv('results/erosionExtrapolatedConfig/totalErosionAtPositionWholeCampaign_{config}.csv'.format(config=config), sep=';')
     return 'succesfully calculated total erosion in ' + config
 
 #######################################################################################################################################################################        
-def calculateTotalErodedLayerThicknessWholeCampaign(configurationList, LP_position, totalErosionFiles='results/totalErosionAtPositionWholeCampaign_'):
+def calculateTotalErodedLayerThicknessWholeCampaign(configurationList, LP_position, totalErosionFiles='results/erosionExtrapolatedConfig/totalErosionAtPositionWholeCampaign_'):
     erosion_position = np.array([0.] * 36)
     deposition_position = np.array([0.] * 36)
     config_missing = []
@@ -959,7 +969,7 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList, LP_positi
     plt.legend()
     plt.xlabel('distance from pumping gap (m)')
     plt.ylabel('total layer thickness (m)')
-    plt.savefig('results/totalErosionWholeCampaignAllPositionsLowIota.png', bbox_inches='tight')
+    plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsLowIota.png', bbox_inches='tight')
     plt.show()
     plt.close()
 
@@ -972,7 +982,7 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList, LP_positi
     plt.legend()
     plt.xlabel('distance from pumping gap (m)')
     plt.ylabel('total layer thickness (m)')
-    plt.savefig('results/totalErosionWholeCampaignAllPositionsHighIota.png', bbox_inches='tight')
+    plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsHighIota.png', bbox_inches='tight')
     plt.show()
     plt.close()
-    no_data.to_csv('results/totalErosionWholeCampaignAllPositions.csv', sep=';')
+    no_data.to_csv('results/erosionFullCampaign/totalErosionWholeCampaignAllPositions.csv', sep=';')

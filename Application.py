@@ -63,10 +63,9 @@ lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
 #incident angle in rad
 alpha = 2 * np.pi/9
 
-configurations = ['DBM000-2520']#, 'EIM000+2620', 'FTM004-2520', 'FTM000+2620']
-#['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
-                  #'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
-                  #'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520']
+configurations = ['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
+                  'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
+                  'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520']
 #done: 'XIM001+2485', none 'KTM000+2520', none 'MMG000+2520', none 'KOF000+2520', 'IKJ000+2520', none 'AIM000+2520', none 'DKJ000+2520', none 'FMM002+2520', none 'FMM002-2520', 
 #done: 'DBM000+2520', 'DBM000-2520', none 'FTM000-2620', 'FTM004+2520', 'FTM004+2585', none 'FTM000+2620', none 'KJM008-2520', 'KJM008-2620',  
 #done: 'EIM000-2520', 'EIM000-2620', 'EIM000+2620', 'EIM000+2614', 'EIM000+2520', 'KJM008+2520', 'KJM008+2620', 'FTM004-2520'
@@ -80,23 +79,20 @@ if not run:
     exit()
 
 if __name__ == '__main__':
-    LP_position = ''
+    #read langmuir probe positions in [m] from pumping gap
+    #index 0 - 5 are langmuir probes on TM2h, 6 - 13 on TM3h, 14 - 17 on TM8h (distance from pumping gap is increasing)
+    LP_position = [OP2_TM2Distances]
+    LP_position.append(OP2_TM3Distances)
+    LP_position.append(OP2_TM8Distances)
+    LP_position = list(itertools.chain.from_iterable(LP_position)) #flattens to 1D list
+    
     for configuration in configurations:
         
         discharges = read.readAllShotNumbersFromLogbook(configuration)
         if type(discharges) == str:
             continue
         
-        #_lower indicates lower divertor unit, _upper upper divertor unit
-        
-        #read langmuir probe positions in [m] from pumping gap
-        #index 0 - 5 are langmuir probes on TM2h, 6 - 13 on TM3h, 14 - 17 on TM8h (distance from pumping gap is increasing)
-        LP_position = [OP2_TM2Distances]
-        LP_position.append(OP2_TM3Distances)
-        LP_position.append(OP2_TM8Distances)
-        LP_position = list(itertools.chain.from_iterable(LP_position)) #flattens to 1D list
-        
-        
+        #_lower indicates lower divertor unit, _upper upper divertor unit    
         not_workingLP, not_workingIR, not_workingTrigger = [], [], []
         for counter, discharge in enumerate(discharges['dischargeID'][:]):
             
@@ -174,11 +170,10 @@ if __name__ == '__main__':
         
         print(process.calculateTotalErodedLayerThicknessWholeCampaignPerConfig(configuration))
     
-    if type(LP_position) != str:
-        process.calculateTotalErodedLayerThicknessWholeCampaign(configurations, LP_position)    
+    process.calculateTotalErodedLayerThicknessWholeCampaign(configurations, LP_position)    
 
 #configuration percentages of total runtime in OP2.2/2.3
-read.getRuntimePerConfiguration()
+read.getRuntimePerConfiguration(configurations=configurations)
 
 
 '''
