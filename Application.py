@@ -1,5 +1,5 @@
 ''' This file is responsible for the final calculation of sputtering yields and the thickness of the erosion layer. 
-    It uses the functions defined in SputteringYieldFunctions after reading the data from the archieveDB'''
+    It processes the data with ProcessData using the functions defined in SputteringYieldFunctions after reading the data with ReadArchiveDB'''
 
 import os
 import w7xarchive
@@ -41,7 +41,7 @@ E_TF = np.array([[256, 282, 308, 720, 2208, 0],
                  [4719, 4768, 4817, 9945, 533127, 0],
                  [9871, 9925, 9978, 20376, 1998893, 0]]) 
 
-#[Be, C, Fe, Mo, W], in [eV] according to Ref. 1
+#heat of sublimation for [Be, C, Fe, Mo, W], in [eV] according to Ref. 1
 E_s = np.array([3.38, 7.42, 4.34, 6.83, 8.68])
 
 #Parameters for chemical erosion of C by H-isotopes, [H, D, T] according to Ref. 1
@@ -51,8 +51,8 @@ E_thd_chem = [15, 15, 15]   #threshold energy for Y_damage
 E_ths_chem = [2, 1, 1]      #threshold energy for Y_surf                                                                        
 E_th_chem=[31, 27, 29]   
 
-#target density in [1/m^3]
-n_target = 9.526*1e28 #for rho=1.9 g/cm^3
+#target density of CFC-HHF divertor in [1/m^3]
+n_target = 9.526*1e28 #for rho=1.9 g/cm^3 (rho*1e6*N_A/M_C) N_A is avogadro number, M_C molecular mass of carbon
 
 #Parameters for net erosion specifically for divertor
 lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
@@ -66,14 +66,69 @@ alpha = 2 * np.pi/9
 configurations = ['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
                   'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
                   'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520']
-#done: 'XIM001+2485', none 'KTM000+2520', none 'MMG000+2520', none 'KOF000+2520', 'IKJ000+2520', none 'AIM000+2520', none 'DKJ000+2520', none 'FMM002+2520', none 'FMM002-2520', 
-#done: 'DBM000+2520', 'DBM000-2520', none 'FTM000-2620', 'FTM004+2520', 'FTM004+2585', none 'FTM000+2620', none 'KJM008-2520', 'KJM008-2620',  
-#done: 'EIM000-2520', 'EIM000-2620', 'EIM000+2620', 'EIM000+2614', 'EIM000+2520', 'KJM008+2520', 'KJM008+2620', 'FTM004-2520'
 
 run = True
 
 #######################################################################################################################################################################
 #HERE IS THE RUNNING PROGRAM
+#read cryopumps
+'''
+urlCVP = {'inletT': "ArchiveDB/raw/W7X/ControlStation.2139/BCA.5_DATASTREAM/0/BCA5_20TI8200",
+          'returnT': "ArchiveDB/raw/W7X/ControlStation.2139/BCA.5_DATASTREAM/1/BCA5_21TI8200"}
+for shotnumber in ['20250304.066', '20250304.075', '20250311.023', '20250313.031', '20250401.037', '20250403.030', '20250403.046',
+                   '20250403.076', '20250408.055', '20250514.026', '20250514.029', '20250514.032', '20250514.037', '20250522.053', '20250522.055']:
+    data = w7xarchive.get_signal_for_program(urlCVP, shotnumber)
+    print(shotnumber)
+    print(np.mean(np.array(data['inletT'][1])))
+    print(np.mean(np.array(data['returnT'][1])))
+
+LP_position = [OP2_TM2Distances]
+LP_position.append(OP2_TM3Distances)
+LP_position.append(OP2_TM8Distances)
+LP_position = list(itertools.chain.from_iterable(LP_position)) 
+
+#plot manually extrapolated erosion over whole campaign
+erosion_position = np.array([0.] * 36)
+deposition_position = np.array([0.] * 36)
+config_missing = []
+no_data = pd.DataFrame({'LP': ['lower0', 'lower1', 'lower2', 'lower3', 'lower4', 'lower5', 'lower6', 'lower7', 'lower8', 'lower9', 'lower10', 'lower11', 'lower12', 'lower13', 'lower14', 'lower15', 'lower16', 'lower17', 
+                            'upper0', 'upper1', 'upper2', 'upper3', 'upper4', 'upper5', 'upper6', 'upper7', 'upper8', 'upper9', 'upper10', 'upper11', 'upper12', 'upper13', 'upper14', 'upper15', 'upper16', 'upper17']})
+if not os.path.isfile('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsManual.csv'):
+    print('file missing for manually extrapolated data')
+    exit()
+else:
+    erosion = pd.read_csv('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsManual.csv', sep=';')
+for counter, config in enumerate(configurations):
+    erosion_position = np.hstack(np.nansum(np.dstack((np.array(erosion[config + '_erosion'][:36]), erosion_position)), 2))
+    deposition_position = np.hstack(np.nansum(np.dstack((np.array(erosion[config + '_deposition'][:36]), deposition_position)), 2))
+
+#print(erosion_position)
+plt.plot(LP_position[:14], erosion_position[:14], 'b--', label='erosion lower divertor unit')
+plt.plot(LP_position[:14], deposition_position[:14], 'b:', label='deposition lower divertor unit')
+plt.plot(LP_position[:14], erosion_position[:14] - deposition_position[:14],'b-', label='net erosion lower divertor unit')
+plt.plot(LP_position[:14], erosion_position[18:32], 'm--', label='erosion upper divertor unit')
+plt.plot(LP_position[:14], deposition_position[18:32], 'm:', label='deposition upper divertor unit')
+plt.plot(LP_position[:14], erosion_position[18:32] - deposition_position[18:32], 'm-', label='net erosion upper divertor unit')
+plt.legend()
+plt.xlabel('distance from pumping gap (m)')
+plt.ylabel('total layer thickness (m)')
+plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsLowIotaManual.png', bbox_inches='tight')
+plt.show()
+plt.close()
+
+plt.plot(LP_position[14:], erosion_position[14:18], 'b--', label='erosion lower divertor unit')
+plt.plot(LP_position[14:], deposition_position[14:18], 'b:', label='deposition lower divertor unit')
+plt.plot(LP_position[14:], erosion_position[14:18] - deposition_position[14:18], 'b-', label='net erosion lower divertor unit')
+plt.plot(LP_position[14:], erosion_position[32:], 'm--', label='erosion upper divertor unit')
+plt.plot(LP_position[14:], deposition_position[32:], 'm:', label='deposition upper divertor unit')
+plt.plot(LP_position[14:], erosion_position[32:] - deposition_position[32:], 'm-', label='net erosion upper divertor unit')
+plt.legend()
+plt.xlabel('distance from pumping gap (m)')
+plt.ylabel('total layer thickness (m)')
+plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsHighIotaManual.png', bbox_inches='tight')
+plt.show()
+plt.close()
+''' 
 
 if not run:
     exit()
@@ -128,13 +183,12 @@ if __name__ == '__main__':
             #index represent the active LPs on each divertor unit
             #Ts in [K], LP_position in [m] from pumping gap, time_array in [s]
             return_IR = read.readSurfaceTemperatureFramesFromIRcam(discharge, time_array, ['lower', 'upper'], LP_position, [index_lower, index_upper])
-            if type(return_IR) == str:
-                if return_IR == 'No IRcam stream for any time in discharge':
-                    not_workingIR.append([discharge, counter])
-                else:
+            if type(return_IR[-1]) == str:
+                if return_IR == 'incorrected trigger':
                     not_workingTrigger.append([discharge, counter])
-                continue
-            Ts_lower, Ts_upper = return_IR
+                else:
+                    not_workingIR.append([discharge, counter])
+            Ts_lower, Ts_upper = return_IR[:-1]
             
             #missing measurement times and values are replaced by adding arrays of 0 to guarantee same data structure of all arrays concerning t, Te, Ts, ne
             for j in range(len(ne_lower)):
@@ -163,17 +217,58 @@ if __name__ == '__main__':
             #plots are saved in safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=divertorUnit, position=position)
             process.processOP2Data(discharge, ne_lower, ne_upper, Te_lower, Te_upper, Ts_lower, Ts_upper, t_lower, t_upper, index_lower, index_upper, alpha, LP_position, m_i, f_i, ions, k, n_target, True)
 
-        #print(not_workingTrigger, not_workingLP, not_workingIR)
+        print('configuration {config}: no trigger {trigger}, no IR {IR}, no LP {LP}'.format(config=configuration, trigger=len(not_workingTrigger), LP=len(not_workingLP), IR=len(not_workingIR)))
         
         #intrapolate missing values, calculate total eroded layer thickness
-        erosionTable = process.calculateTotalErodedLayerThicknessSeveralDischarges(configuration, discharges['dischargeID'], discharges['duration'], discharges['overviewTable'], alpha, m_i, f_i, ions, k, n_target, intrapolated=False)
+        erosionTable = process.calculateTotalErodedLayerThicknessSeveralDischarges(configuration, discharges['dischargeID'], discharges['duration'], discharges['overviewTable'], alpha, m_i, f_i, ions, k, n_target, intrapolated=False, plotting=True)
         
         print(process.calculateTotalErodedLayerThicknessWholeCampaignPerConfig(configuration))
     
     process.calculateTotalErodedLayerThicknessWholeCampaign(configurations, LP_position)    
 
-#configuration percentages of total runtime in OP2.2/2.3
-read.getRuntimePerConfiguration(configurations=configurations)
+    #configuration percentages of total runtime in OP2.2/2.3
+    read.getRuntimePerConfiguration(configurations=configurations)
+
+    #plot manually extrapolated erosion over whole campaign
+    erosion_position = np.array([0.] * 36)
+    deposition_position = np.array([0.] * 36)
+    config_missing = []
+    no_data = pd.DataFrame({'LP': ['lower0', 'lower1', 'lower2', 'lower3', 'lower4', 'lower5', 'lower6', 'lower7', 'lower8', 'lower9', 'lower10', 'lower11', 'lower12', 'lower13', 'lower14', 'lower15', 'lower16', 'lower17', 
+                             'upper0', 'upper1', 'upper2', 'upper3', 'upper4', 'upper5', 'upper6', 'upper7', 'upper8', 'upper9', 'upper10', 'upper11', 'upper12', 'upper13', 'upper14', 'upper15', 'upper16', 'upper17']})
+    if not os.path.isfile('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsManual.csv'):
+        print('file missing for manually extrapolated data')
+        exit()
+    else:
+        erosion = pd.read_csv('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsManual.csv', sep=';')
+    for counter, config in enumerate(configurations):
+        erosion_position = np.hstack(np.nansum(np.dstack((np.array(erosion[config + '_erosion'][:36]), erosion_position)), 2))
+        deposition_position = np.hstack(np.nansum(np.dstack((np.array(erosion[config + '_deposition'][:36]), deposition_position)), 2))
+    #print(erosion_position)
+    plt.plot(LP_position[:14], erosion_position[:14], 'b--', label='erosion lower divertor unit')
+    plt.plot(LP_position[:14], deposition_position[:14], 'b:', label='deposition lower divertor unit')
+    plt.plot(LP_position[:14], erosion_position[:14] - deposition_position[:14],'b-', label='net erosion lower divertor unit')
+    plt.plot(LP_position[:14], erosion_position[18:32], 'm--', label='erosion upper divertor unit')
+    plt.plot(LP_position[:14], deposition_position[18:32], 'm:', label='deposition upper divertor unit')
+    plt.plot(LP_position[:14], erosion_position[18:32] - deposition_position[18:32], 'm-', label='net erosion upper divertor unit')
+    plt.legend()
+    plt.xlabel('distance from pumping gap (m)')
+    plt.ylabel('total layer thickness (m)')
+    plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsLowIotaManual.png', bbox_inches='tight')
+    plt.show()
+    plt.close()
+
+    plt.plot(LP_position[14:], erosion_position[14:18], 'b--', label='erosion lower divertor unit')
+    plt.plot(LP_position[14:], deposition_position[14:18], 'b:', label='deposition lower divertor unit')
+    plt.plot(LP_position[14:], erosion_position[14:18] - deposition_position[14:18], 'b-', label='net erosion lower divertor unit')
+    plt.plot(LP_position[14:], erosion_position[32:], 'm--', label='erosion upper divertor unit')
+    plt.plot(LP_position[14:], deposition_position[32:], 'm:', label='deposition upper divertor unit')
+    plt.plot(LP_position[14:], erosion_position[32:] - deposition_position[32:], 'm-', label='net erosion upper divertor unit')
+    plt.legend()
+    plt.xlabel('distance from pumping gap (m)')
+    plt.ylabel('total layer thickness (m)')
+    plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsHighIotaManual.png', bbox_inches='tight')
+    plt.show()
+    plt.close()
 
 
 '''

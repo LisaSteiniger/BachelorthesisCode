@@ -126,6 +126,7 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_
         LPs are numbered as follows: TM2h07 holds probe 0 to 5, TM3h01 6 to 13, TM8h01 14 to 17 -> LP_positions should take numbers as indices, index_divertorUnits applies same scheme
         for reading temperature, TM2h06 and TM3h02 are chosen as 07 and 01 are subject to leading edges'''
     T_data = []
+    comment = 0
     '''
     if LP_number < 5:
         targetElements = ['TM8h_01']
@@ -149,8 +150,22 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_
 
         port = camera
         archiveComp = ['Test', 'raw', 'W7XAnalysis', 'QRT_IRCAM_new']
+        
+        #test for number of triggers, discard discharges with less/more than one trigger for both cameras
+        prog = w7xarchive.get_program_info(dischargeID)
+        if (prog["trigger"] is None) or len(prog["trigger"]['1']) < 1:
+            print(f'The program {dischargeID} has no trigger {"1"}')
+            T_data = [[[0] * len(times)] * len(LP_indices)] * 2
+            print(T_data)
+            return [T_data[0], T_data[1], 'incorrected trigger'] 
+        elif len(prog["trigger"]['1']) > 1:
+            print(f'The program {dischargeID} has more than one trigger {"1"}')
+            T_data = [[[0] * len(times)] * len(LP_indices)] * 2
+            print(T_data)
+            return [T_data[0], T_data[1], 'incorrected trigger'] 
+            
 
-        #test if any data is available for the discharge at any time
+        #test if any data is available for the discharge at any time for the camera
         time_from, time_to = w7xarchive.get_program_from_to(dischargeID)            
         signal_name = np.append(archiveComp, port + '_meanHF_TMs_DATASTREAM')
         normed_signal = w7xarchive.get_base_address(signal_name)
@@ -158,21 +173,15 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_
         versioned_signal, url_tail = w7xarchive.get_stream_address(url)
         highest_version = w7xarchive.get_last_version(versioned_signal, time_from, time_to)
         if highest_version is None:
-            print('No IRcam stream for any time in discharge')
-            return 'No IRcam stream for any time in discharge'
-
-        #test for number of triggers, discard discharges with less/more than one trigger
-        prog = w7xarchive.get_program_info(dischargeID)
-        if (prog["trigger"] is None) or len(prog["trigger"]['1']) < 1:
-            print(f'The program {dischargeID} has no trigger {"1"}')
-            return f'The program {dischargeID} has no trigger {"1"}'
-        elif len(prog["trigger"]['1']) > 1:
-            print(f'The program {dischargeID} has more than one trigger {"1"}')
-            return f'The program {dischargeID} has more than one trigger {"1"}'
+            print('No IRcam stream for any time in discharge at ' + divertorUnit + ' divertor unit')
+            T_data.append([[0] * len(LP_indices)] * len(times))
+            comment = 'no IR data'
+            continue 
         
         for time in times:
             test = heatflux_T_download.heatflux_T_process(dischargeID, camera)
             pulse_duration = test.availtimes[-1] - 1
+            
             #test if any data is available for the discharge time interval
             port = 'AEF50'
             archiveComp = ['Test', 'raw', 'W7XAnalysis', 'QRT_IRCAM_new']
@@ -223,11 +232,12 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID, times, divertorUnits, LP_
                 
             T_data_divertor.append(T_data_dt)
         T_data.append(T_data_divertor)
+    print(T_data)
 
     if len(T_data) == 2:    
-        return [np.array(T_data[0]).T, np.array(T_data[1]).T]
+        return [np.array(T_data[0]).T, np.array(T_data[1]).T, comment]
     else:
-        return np.array(T_data[0]).T
+        return [np.array(T_data[0]).T, comment]
     
 #######################################################################################################################################################################
 def readLangmuirProbeDataFromXdrive(dischargeID):
@@ -542,6 +552,7 @@ def readArchieveDB():
 #######################################################################################################################################################################
 def readAllShotNumbersFromLogbook(config, safe ='results/configurations/dischargeList_OP223_', overviewTableLink='results/calculationTables/results_'):
     url = 'https://w7x-logbook.ipp-hgw.mpg.de/api/_search'
+    urlTriggerBase = 'http://archive-webapi.ipp-hgw.mpg.de/programs.json?from='
 
     # q = 'tags.diagnostic\ result:"raw\ data"'
     # !! Helium Hydrogen discharges werden hier nicht unterschieden
@@ -570,7 +581,7 @@ def readAllShotNumbersFromLogbook(config, safe ='results/configurations/discharg
     # p = {'time':'[2018 TO 2018]', 'size':'9999', 'q' : q }   # OP1.2b
     # p = {'time':'[2022 TO 2023]', 'size':'9999', 'q' : q }   # OP2.1
 
-    id, duration, overviewTables = [], [], []    #id stores dischargeIDs, duration their ECRH heating period duration, configuration theit configuration
+    durationTrigger, id, duration, overviewTables, duration_ECRH_NBI= [], [], [], [], []    #id stores dischargeIDs, duration their ECRH heating period duration, configuration theit configuration
 
     res = requests.get(url, params=p).json()
 
@@ -588,6 +599,67 @@ def readAllShotNumbersFromLogbook(config, safe ='results/configurations/discharg
             dischargeID = dischargeID[0][3:] + '.00' + dischargeID[1]
         id.append(dischargeID) 
         overviewTables.append(overviewTableLink + dischargeID + '.csv')
+        print(dischargeID)
+
+        urlTrigger = urlTriggerBase + dischargeID + '#'
+        resTrigger = requests.get(urlTrigger).json()
+        if 'programs' in resTrigger.keys():
+            if type(resTrigger['programs']) == list:
+                if 'trigger' in resTrigger['programs'][0].keys():
+                    if type(resTrigger['programs'][0]['trigger']) == dict:
+                        if '1' in resTrigger['programs'][0]['trigger'].keys() and '4' in resTrigger['programs'][0]['trigger'].keys():
+                            if type(resTrigger['programs'][0]['trigger']['4']) == list and type(resTrigger['programs'][0]['trigger']['1']) == list:
+                                durationTrigger.append((resTrigger['programs'][0]['trigger']['4'][0] - resTrigger['programs'][0]['trigger']['1'][0])/1e9)
+                            else:
+                                print('Trigger "1" or "4" is not a list')
+                                durationTrigger.append(np.nan)
+                        else:
+                            print('Trigger "1" or "4" does not exist')
+                            durationTrigger.append(np.nan)
+                    else:
+                        print('Trigger is not an dictionary')
+                        durationTrigger.append(np.nan)
+                else:
+                    print('No trigger in "programs"')
+                    durationTrigger.append(np.nan)
+            else:
+                print('"programs" is no list')
+                durationTrigger.append(np.nan)
+        else:
+            print('Key "programs" does not exist')
+            durationTrigger.append(np.nan)
+
+        heating_data = w7xarchive.get_signal_for_program({'ECRH': "Test/raw/W7X/CBG_ECRH/TotalPower_DATASTREAM/V1/0/Ptot_ECRH",
+                                                          #'NBIS3': "ArchiveDB/raw/W7XAnalysis/NBI/S3_PEXT_DATASTREAM/V1/0/Extracted power (S3)", 
+                                                          #'NBIS4': "ArchiveDB/raw/W7XAnalysis/NBI/S4_PEXT_DATASTREAM/V1/0/Extracted power (S4)", 
+                                                          #'NBIS7': "ArchiveDB/raw/W7XAnalysis/NBI/S7_PEXT_DATASTREAM/V1/0/Extracted power (S7)", 
+                                                          #'NBIS8': "ArchiveDB/raw/W7XAnalysis/NBI/S8_PEXT_DATASTREAM/V1/0/Extracted power (S8)",
+                                                          'NBIS3': "ArchiveDB/codac/W7X/ControlStation.2176/BE000_DATASTREAM/4/s3_Pel/scaled", 
+                                                          'NBIS4': "ArchiveDB/codac/W7X/ControlStation.2176/BE000_DATASTREAM/5/s4_Pel/scaled", 
+                                                          'NBIS7': "ArchiveDB/codac/W7X/ControlStation.2092/BE000_DATASTREAM/4/s7_Pel/scaled", 
+                                                          'NBIS8': "ArchiveDB/codac/W7X/ControlStation.2092/BE000_DATASTREAM/5/s8_Pel/scaled"}, 
+                                                          dischargeID)
+        for i, key in enumerate(heating_data.keys()):
+            if i == 0:
+                merged_heating = pd.DataFrame({'time': np.round(np.array(heating_data[key][0]), 3), key: heating_data[key][1]})
+            else:
+                merged_heating = pd.merge(merged_heating, pd.DataFrame({'time': np.round(np.array(heating_data[key][0]), 3), key: heating_data[key][1]}), 'outer', on='time')
+
+        heating = np.zeros_like(np.array(merged_heating['time']))
+        for key in merged_heating.keys():
+            if 'ECRH' in key:
+                heating = heating + np.nan_to_num(np.array(merged_heating[key]))/1000
+            elif 'NBI' in key:
+                heating = heating + np.nan_to_num(np.array(merged_heating[key]))
+
+        merged_heating['heating'] = heating
+        filter_heating = [x > 0.1 for x in merged_heating['heating']]
+        if sum(filter_heating) > 0:
+            duration_ECRH_NBI.append(merged_heating['time'][len(filter_heating) - 1 - filter_heating[::-1].index(True)] - merged_heating['time'][filter_heating.index(True)])
+        else:
+            if True:
+                duration_ECRH_NBI.append(np.nan)
+
         for tag in discharge['_source']['tags']: 
             if 'catalog_id' in tag.keys():
                 if tag['catalog_id'] == '1#3':
@@ -597,9 +669,12 @@ def readAllShotNumbersFromLogbook(config, safe ='results/configurations/discharg
         if len(duration) != len(id):
             duration.append(np.nan)
 
+        if abs(duration[-1] - duration_ECRH_NBI[-1]) > 20:
+            if True:
+                 print('control that discharge')
     configuration = [config] * len(res['hits']['hits'])
 
-    dischargeTable = pd.DataFrame({'configuration': configuration, 'dischargeID': id, 'duration': duration, 'overviewTable': overviewTables})
+    dischargeTable = pd.DataFrame({'configuration': configuration, 'dischargeID': id, 'duration': durationTrigger, 'duration_planned': duration, 'durationHeating': duration_ECRH_NBI, 'overviewTable': overviewTables})
     dischargeTable.to_csv(safe + config + '.csv', sep=';')
 
     return dischargeTable

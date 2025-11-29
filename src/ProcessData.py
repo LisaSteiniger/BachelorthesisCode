@@ -506,7 +506,7 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
     times = [times] * len(LPindices)
     times = np.hstack(np.array(times))
 
-    for quantity_column in ['ne', 'Te', 'Ts']:
+    for quantity_column, replacer in zip(['ne', 'Te', 'Ts'], [np.nan, np.nan, 320]):
         quantity_list = []
         quantity_origin = []
         for index, quantity in enumerate(overviewTable[quantity_column]):
@@ -517,7 +517,7 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
                     print(str(index) + ' in LPfirst')
 
                     if str(index) in LPindices.T[2]: #if first value is also last value and missing
-                        quantity_list.append(np.nan)
+                        quantity_list.append(replacer)
                     
                     else: #if first value is not also last value
                         for i in range(index + 1, int(LPindices[-1][2]) + 1):
@@ -526,7 +526,7 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
                                 break
 
                             elif str(i) in LPindices.T[2]: #last value is reached without finding an existing value, append nan
-                                quantity_list.append(np.nan)
+                                quantity_list.append(replacer)
                                 break
 
                 elif str(index) in LPindices.T[2]: #if last value is missing
@@ -589,8 +589,10 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
             #plotting not tested yet
             if plotting==True:   
                 safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=LPindex[0][:5], position=LPindex[0][5:])
+                #print(times)
+                #print(len(n_e), len(T_e), len(T_s), len(return_erosion[0]), len(times[:int(LPindices[0][2]) + 1]))
                 plot.plotOverview(n_e, T_e, T_s, return_erosion[0], return_erosion[3], return_erosion[4], 
-                                  return_erosion[5], return_erosion[7], return_erosion[8], return_erosion[10], times, safe)
+                                  return_erosion[5], return_erosion[7], return_erosion[8], return_erosion[10], times[:int(LPindices[0][2]) + 1], safe)
     
 
     #overwrite overviewTable file
@@ -619,7 +621,7 @@ def intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_
     return overviewTable
 
 #######################################################################################################################################################################
-def calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated=False):
+def calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated=False, plotting=False):
     ''' calculates total erosion layer thickness for all LPs of a discharge by adding erosion layer thickness up to last LP measurement to erosion layer thickness from last LP measurement to end of discharge
         duration is duration of discharge corresponding to overviewTable that is by default not intrapolated (intrapolated=False) 
         returns 2D array of structure [[LP1, erosionLayer1], [LP2, erosionLayer2], ...]'''
@@ -628,7 +630,7 @@ def calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overview
 
     #intrapolate overviewTable in required
     if intrapolated == False:
-        overviewTable = intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_i, ions, k, n_target)
+        overviewTable = intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_i, ions, k, n_target, plotting)
 
     #will hold the total erosion layer thickness at each LP position after discharge
     erosion = []
@@ -669,7 +671,7 @@ def calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overview
     return erosion
 
 #######################################################################################################################################################################
-def calculateTotalErodedLayerThicknessSeveralDischarges(config, discharges, durations, overviewTables, alpha, m_i, f_i, ions, k, n_target, intrapolated=False):
+def calculateTotalErodedLayerThicknessSeveralDischarges(config, discharges, durations, overviewTables, alpha, m_i, f_i, ions, k, n_target, intrapolated=False, plotting=False):
     ''' calculates total erosion layer thickness for all LPs of a discharge by adding erosion layer thickness up to last LP measurement to erosion layer thickness from last LP measurement to end of discharge
         duration is duration of discharge corresponding to overviewTable that is by default not intrapolated (intrapolated=False) 
         returns 2D array of structure [[LP1, erosionLayer1], [LP2, erosionLayer2], ...]'''
@@ -688,7 +690,7 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(config, discharges, dura
         durationList.append(duration)
 
         overviewTable = pd.read_csv(overviewTable, sep=';')
-        erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated)
+        erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, intrapolated, plotting)
         for erosionLP in erosion:
             if 'lower0' == erosionLP[0]:
                 LP_lower0.append(erosionLP[1:])
