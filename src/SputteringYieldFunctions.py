@@ -8,45 +8,55 @@ import scipy.integrate as integrate
 #######################################################################################################################################################################
 #THOSE HAVE TO BE DEFINED IN ANY FILE USING THOSE FUNCTIONS
 #initialize common parameter values
-e  =  scipy.constants.elementary_charge 
-k_B = scipy.constants.Boltzmann
-k = k_B/e 
+if __name__ == '__main__':
+    e  =  scipy.constants.elementary_charge 
+    k_B = scipy.constants.Boltzmann
+    k = k_B/e 
 
-#lines for [Be, C, Fe, Mo, W] and columns with [H, D, T, He, Self-Sputtering, O] (O only known for C), in [eV]
-E_TF = np.array([[256, 282, 308, 720, 2208, 0],
-                 [415, 447, 479, 1087, 5688, 9298],
-                 [2544, 2590, 2635, 5517, 174122, 0], 
-                 [4719, 4768, 4817, 9945, 533127, 0],
-                 [9871, 9925, 9978, 20376, 1998893, 0]]) 
+    #lines for [Be, C, Fe, Mo, W] and columns with [H, D, T, He, Self-Sputtering, O] (O only known for C), in [eV]
+    E_TF = np.array([[256, 282, 308, 720, 2208, 0],
+                    [415, 447, 479, 1087, 5688, 9298],
+                    [2544, 2590, 2635, 5517, 174122, 0], 
+                    [4719, 4768, 4817, 9945, 533127, 0],
+                    [9871, 9925, 9978, 20376, 1998893, 0]]) 
 
-#[Be, C, Fe, Mo, W], in [eV]  
-E_s = np.array([3.38, 7.42, 4.34, 6.83, 8.68])
+    #[Be, C, Fe, Mo, W], in [eV]  
+    E_s = np.array([3.38, 7.42, 4.34, 6.83, 8.68])
 
-#Parameters for chemical erosion of C by H-isotopes, [H, D, T] 
-Q_y_chem = np.array([0.035, 0.1, 0.12])                                                                  
-C_d_chem = np.array([250, 125, 83])                                                                               
-E_thd_chem = [15, 15, 15]   #threshold energy for Y_damage                                                                      
-E_ths_chem = [2, 1, 1]      #threshold energy for Y_surf                                                                        
-E_th_chem=[31, 27, 29]   
+    #Parameters for chemical erosion of C by H-isotopes, [H, D, T] 
+    Q_y_chem = np.array([0.035, 0.1, 0.12])                                                                  
+    C_d_chem = np.array([250, 125, 83])                                                                               
+    E_thd_chem = [15, 15, 15]   #threshold energy for Y_damage                                                                      
+    E_ths_chem = [2, 1, 1]      #threshold energy for Y_surf                                                                        
+    E_th_chem=[31, 27, 29]   
 
-#Parameters for net erosion specifically for divertor
-lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
+    #Parameters for net erosion specifically for divertor
+    lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
 
+else:
+    from Application import e, u, k_B, k, E_TF, E_s, Q_y_chem, C_d_chem, E_thd_chem, E_ths_chem, E_th_chem, lambda_nr, lambda_nl
 #######################################################################################################################################################################
 #######################################################################################################################################################################
 #Calculation of the Physical Sputtering Yield of Graphite under Bombardement with Hydrogen, Deuterium, Tritium , Helium, and Carbon Particles (self-sputtering)
 
-#calculation sputtering yield from N_emmited and N_incident
-def calculatePhysicalSputteringYieldFromN(N_emmitted=1, N_incident=1):
+def calculatePhysicalSputteringYieldFromN(N_emmitted: int =1, N_incident: int =1) -> float:
+    ''' This function calculates the sputtering yield from number of incident particles "N_incident" and number of emitted particles "N_emmited"
+        Returns single value for sputtering yield [unitless]'''
     return N_emmitted/N_incident                                                
 
-#calculate sputtering yield from E_dep and E_s, provide E_s in [eV], d in [angstroem], n_o_times_S_n in [eV/angstroem]   
-def calculatePhysicalSputteringYieldFromE(E_s=5, d=5, n_o_times_S_n=0.1*e/(1e-10)):                                                                                  
+#######################################################################################################################################################################
+def calculatePhysicalSputteringYieldFromE(E_s: int|float =5, d: int|float =5, n_o_times_S_n: int|float =0.1*e/(1e-10)) -> float:  
+    ''' This function calculates the sputtering yield from from deposited energy "E_dep" and heat of sublimation "E_s" in [eV]
+        "E_dep" is given by layer thickness of the first few layers "d" in [angstroem], and "n_o_times_S_n" in [eV/angstroem]
+        Returns single value for sputtering yield [unitless]'''                                                                             
     E_dep = n_o_times_S_n * d                                                                                                                                                         
-    return E_dep/E_s                                                                             
-
-#calculate physical sputtering yield for various target-ion combinations according to Ref.1, provide E in [eV]
-def calculatePhysicalSputteringYield(targetMaterial='C', incidentParticle='H', E=2, alpha=np.pi/2): 
+    return E_dep/E_s     
+                                                                        
+#######################################################################################################################################################################
+def calculatePhysicalSputteringYield(targetMaterial: str ='C', incidentParticle: str ='H', E: int|float =2, alpha: int|float =np.pi/2, n_target :int|float =9.526*1e28) -> float: 
+    ''' This function calculates the physical sputtering yield for various target ("targetMaterial") - ion ("incidentParticle") combinations according to Ref.1
+        energy of the incident particle "E" is given in [eV], incident angle "alpha" of that ion is given in [rad], atomic target density "n_target" in [1/m^3]
+        Returns single value for sputtering yield [unitless]'''
     #lines for [Be, C, Fe, Mo, W] and columns with [H, D, T, He, Self-Sputtering, O] (O only known for C)
     Q_y_phys = np.array([[0.07, 0.11, 0.14, 0.28, 0.67, 0],
                          [0.05, 0.08, 0.10, 0.2, 0.75, 1.02], 
@@ -72,7 +82,7 @@ def calculatePhysicalSputteringYield(targetMaterial='C', incidentParticle='H', E
     #[Be, C, Fe, Mo, W]
     M2 = np.array([9.01218, 12.011, 55.847, 95.94, 183.85])             #in [u]=[g/mol]     
     Z2 = np.array([4, 6, 26, 42, 74])                           
-    n = np.array([11.3e28, 11.3e28, 11.3e28, 11.3e28, 11.3e28])                             #in [1/m^-3]      
+    n = np.array([n_target] * 5)                             #in [1/m^3]      
     
     #choose applying parameters by setting the indices
     if targetMaterial=="Be":
@@ -116,8 +126,11 @@ def calculatePhysicalSputteringYield(targetMaterial='C', incidentParticle='H', E
 
     return Y_phys
 
-#calculate physical sputtering yield for self-sputtering of carbon according to Ref. 2, provide E in [eV]
-def calculatePhysicalSputteringYieldEckstein(E=2, alpha=np.pi/4):
+#######################################################################################################################################################################
+def calculatePhysicalSputteringYieldEckstein(E: int|float =2, alpha: int|float =np.pi/4) -> float:
+    ''' This function calculates the physical sputtering yield for self-sputtering of carbon according to Ref. 2
+        energy of the incident particle "E" is given in [eV], incident angle "alpha" of that ion is given in [rad]
+        Returns single value for sputtering yield [unitless]'''
     #Fit for Parameter f
     y0_f = 4.55878
     x0_f = 25.5644
@@ -191,10 +204,13 @@ def calculatePhysicalSputteringYieldEckstein(E=2, alpha=np.pi/4):
     return Y_phys
 
 #######################################################################################################################################################################
+#######################################################################################################################################################################
 #Calculation of the Chemical Erosion Yield of Graphite under Bombardement with Hydrogen, Deuterium, Tritium
 
-#Chemical erosion yield for low fluxes according to Ref. 1, provide E in [eV], T_s in [K], flux in [ions/(s m^2)]
-def calculateChemicalErosionYield(incidentParticle='H', E=2, T_s=600, flux=1e22):   
+def calculateChemicalErosionYield(incidentParticle: str ='H', E: int|float =2, T_s: int|float =600, flux: int|float =1e22) -> float:   
+    ''' This function calculates the chemical erosion yield caused by hydrogen isotope "incidentParticle" for low flux densities according to Ref. 1
+        energy of the incident particle "E" is given in [eV], "T_s" is the surface temperature of the target in [K], ion flux density "flux" in [ions/(s m^2)]
+        Returns single value for sputtering yield [unitless]'''
     #initialize parameter
     c_chem = np.array([1.865, 1.7, 1.535, 1.38, 1.26])                                                                          
     T_s *= k                    #conversion to [eV] 
@@ -237,8 +253,11 @@ def calculateChemicalErosionYield(incidentParticle='H', E=2, T_s=600, flux=1e22)
         
     return Y_chem
 
-#Chemical erosion yield for low fluxes following Roths Formula (Ref. 3), provide E in [eV], T_s in [K], flux in [ions/(s m^2)], k in [eV/K]
-def calculateChemicalErosionYieldRoth(incidentParticle='H', E=2, T_s=600, flux=1e22):                                                       
+#######################################################################################################################################################################
+def calculateChemicalErosionYieldRoth(incidentParticle: str ='H', E: int|float =2, T_s: int|float =600, flux: int|float =1e22) -> float:
+    ''' This function calculates the chemical erosion yield caused by hydrogen isotope "incidentParticle" for low flux densities following Roths Formula (Ref. 3)
+        energy of the incident particle "E" is given in [eV], "T_s" is the surface temperature of the target in [K], ion flux density "flux" in [ions/(s m^2)], Boltzmann constant "k" in [eV/K]
+        Returns single value for sputtering yield [unitless]'''                                                       
     #index to access correct array entry for e.g. Q_y_chem
     if incidentParticle=="H":
         incidentIndex = 0
@@ -259,7 +278,7 @@ def calculateChemicalErosionYieldRoth(incidentParticle='H', E=2, T_s=600, flux=1
     if E<E_th_chem[incidentIndex]:
         Y_phys = 0
     else:                     
-        Y_phys = (Q_y_chem[incidentIndex] * s_n) * (1 - (E_th_chem[incidentIndex]/E)**(2/3)) * ((1 - (E_th_chem[incidentIndex]/E))**2)                                          #Y als Funktion von E und dem Winkel alpha=0
+        Y_phys = (Q_y_chem[incidentIndex] * s_n) * (1 - (E_th_chem[incidentIndex]/E)**(2/3)) * ((1 - (E_th_chem[incidentIndex]/E))**2)         
     
     if E<E_ths_chem[incidentIndex]:
         Y_surf = 0
@@ -279,21 +298,30 @@ def calculateChemicalErosionYieldRoth(incidentParticle='H', E=2, T_s=600, flux=1
 
     return Y_chem
 
-
-#Chemical erosion yield for high fluxes (>=1e+21) according to Ref. 1, provide flux in [ions/(s m^2)]
-def calculateChemicalErosionYieldHighFlux(Y_chem_lowFlux=1e-3, flux=1e22):
+#######################################################################################################################################################################
+def calculateChemicalErosionYieldHighFlux(Y_chem_lowFlux: int|float =1e-3, flux: int|float =1e22) -> float:
+    ''' This function calculates the chemical erosion yield caused by hydrogen isotopes for high flux densities (>=1e+21) according to Ref. 1
+        Chemical sputtering yield for low fluxes "Y_chem_lowFlux", ion flux density "flux" in [ions/(s m^2)]
+        Returns single value for sputtering yield [unitless]'''
     return Y_chem_lowFlux/(1 + (flux/(6 * 1e21))**0.54)
 
 #######################################################################################################################################################################
+#######################################################################################################################################################################
 #Calculation of Total Sputtering Yield for one Type of Incident Ion 
 
-#Energy distribution of ions (thermal energy + acceleration in Langmuir Sheath), E and T_i in [eV], q in [1, 2, 3] for [H, C, O]
-def energyDistributionIons(E=2, T_i=1, q=1):
-    #based on Maxwellian velocity (abs(v)) distribution of isotropic ions and selectionof those ions moving towards the wall
+def energyDistributionIons(E: int|float =2, T_i: int|float =1, q: int=1):
+    ''' This function defines the energy distribution of ions (thermal energy + acceleration in Langmuir Sheath)
+        Energy of the incident particle "E" and ion temperature "T_i" are given in [eV], ionization number "q" is [1, 2, 3] for [H, C, O]
+        Based on Maxwellian velocity (abs(v)) distribution of isotropic ions and selection of those ions moving towards the wall'''
     return 4 * (1/(2 * T_i))**2 * (E - 3 * T_i * q) * np.exp(-(E - 3 * T_i * q)/(T_i))
 
-#E and T_i in [eV], T_s in [K], flux in [ions/(s m^2)]
-def calculateTotalErosionYield(incidentParticle, T_i, targetMaterial='C', alpha=np.pi/4, T_s=600, flux=1e22):
+#######################################################################################################################################################################
+def calculateTotalErosionYield(incidentParticle: str, T_i: int|float, targetMaterial: str ='C', alpha: int|float =np.pi/4, T_s: int|float =600, 
+                               flux: int|float =1e22, n_target: int|float =9.526*1e28) -> float:
+    ''' This function calculates the total erosion yield caused by on incident ion species "incidentParticle" on the target made from "targetMaterial"
+        Ion temperature "T_i" is given in [eV], incident angle "alpha" of that ion is given in [rad], "T_s" is the surface temperature of the target in [K]
+        ion flux density "flux" in [ions/(s m^2)], atomic target density "n_target" in [1/m^3]
+        Returns single value for sputtering yield [unitless]'''       
     #as all ion energies should be considered but with appropriate weighting factor, integral (over all applying energies) of erosion yield times energy distribution is chosen
     if T_s != 0:
         if incidentParticle=="C":
@@ -302,106 +330,77 @@ def calculateTotalErosionYield(incidentParticle, T_i, targetMaterial='C', alpha=
             q_i = 3
         else:
             q_i = 1
-        def Integral(incidentParticle, E, T_i, targetMaterial='C', alpha=np.pi/4, T_s=600, flux=1e22):
+        def Integral(incidentParticle: str, E: int|float, T_i: int|float, targetMaterial: str ='C', alpha: int|float =np.pi/4, T_s: int|float =600, 
+                     flux: int|float =1e22, n_target: int|float =9.526*1e28):
             if incidentParticle=="H":
-                Y = calculatePhysicalSputteringYield(targetMaterial, 'H', E, alpha) + calculateChemicalErosionYieldRoth('H', E, T_s, flux)#+ calculateChemicalErosionYield('H', E, T_s, flux)
+                Y = calculatePhysicalSputteringYield(targetMaterial, 'H', E, alpha, n_target) + calculateChemicalErosionYieldRoth('H', E, T_s, flux)#+ calculateChemicalErosionYield('H', E, T_s, flux)
             elif incidentParticle=="D":
-                Y = calculatePhysicalSputteringYield(targetMaterial, 'D', E, alpha) + calculateChemicalErosionYieldRoth('D', E, T_s, flux)
+                Y = calculatePhysicalSputteringYield(targetMaterial, 'D', E, alpha, n_target) + calculateChemicalErosionYieldRoth('D', E, T_s, flux)
             elif incidentParticle=="T":
-                Y = calculatePhysicalSputteringYield(targetMaterial, 'T', E, alpha) + calculateChemicalErosionYieldRoth('T', E, T_s, flux)
+                Y = calculatePhysicalSputteringYield(targetMaterial, 'T', E, alpha, n_target) + calculateChemicalErosionYieldRoth('T', E, T_s, flux)
             elif incidentParticle=="O":
-                Y = calculatePhysicalSputteringYield(targetMaterial, 'O', E, alpha) + 0.7 #0.7 is literature value for chem erosion of O on C
+                Y = calculatePhysicalSputteringYield(targetMaterial, 'O', E, alpha, n_target) + 0.7 #0.7 is literature value for chem erosion of O on C
             elif incidentParticle=="C":
                 Y = calculatePhysicalSputteringYieldEckstein(E, alpha)   
             return energyDistributionIons(E, T_i, q_i) * Y
-        IntegralFunction = lambda E: Integral(incidentParticle, E, T_i, targetMaterial, alpha, T_s, flux)
+        IntegralFunction = lambda E: Integral(incidentParticle, E, T_i, targetMaterial, alpha, T_s, flux, n_target)
         IntegralResult = integrate.quad(IntegralFunction, 3 * T_i * q_i, np.inf)
         return IntegralResult[0]
     else:
         return 0
-
+    
+#######################################################################################################################################################################
 #######################################################################################################################################################################
 #Calculation of Fluxes of Incident Ions and Eroded Particles, and Thickness of Eroded Layer according to Ref. 1
 
-#Calculation of incident ion flux density from ion velocity
-#muss da noch * f mit rein für einzelne Ionenflüsse?
-def calculateFluxIncidentIonFromSpeed(c_w, n_e):
+def calculateFluxIncidentIonFromSpeed(c_w: int|float, n_e: int|float) -> float:
+    ''' This function calculates the incident ion flux density from ion velocity "c_w" in [m/s] and the electron density "n_e" in [1/m^3]
+        Returns single value for flux density in [1/s*m^2]
+        muss da noch * f mit rein für einzelne Ionenflüsse?'''
     return c_w * n_e  
 
-#Calculation of incident ion flux density from ion velocity, provide temperatures in [K], k_B in [J/K], m_i in [kg], n_e at last closed flux surface in [1/m^3]?
-def calculateFluxIncidentIon(T_e, T_i, m_i, n_e, f):
+#######################################################################################################################################################################
+def calculateFluxIncidentIon(T_e: int|float, T_i: int|float, m_i: int|float, n_e: int|float, f: int|float) -> float:
+    ''' This function calculates the incident ion flux density from electron and ion temperature "T_e" and "T_i" in [K]
+        ion mass m_i in [kg], the electron density at last closed flux surface "n_e" in [1/m^3], ion concentration "f"
+        Boltzmann constant "k_B" in [J/K]
+        Returns single value for flux density in [1/s*m^2]'''
     return np.sqrt(k_B * (T_e + T_i)/m_i) * n_e * f
 
-#Calculation of erosion rate of graphite (redeposition not considered), provide flux in [1/(s*m^2)], n_target in [1/m^3]
-#Y and flux must be np.arrays containing sputtering yields and ion fluxes for all relevant erosion processes (phys. sputtering by H, O, C, chem. erosion by H, O)
-def calculateErosionRate(Y, flux, n_target):                                                               
+#######################################################################################################################################################################
+def calculateErosionRate(Y: list, flux: list, n_target: int|float) -> float:                                                               
+    ''' This function calculates the erosion rate (redeposition not considered)
+        The ion flux density "flux" should be provided in [1/(s*m^2)], the atomic target density "n_target" in [1/m^3]
+        "Y" and "flux" must be np.arrays containing sputtering yields and ion fluxes for all ion species
+        -> "Y" includes all relevant erosion processes (phys. sputtering by H, O, C, chem. erosion by H, O)
+        Returns single value for the erosion rate in [m/s] at moment x'''
     return sum(Y * flux/n_target)
 
-#Calculation of layer thickness of graphite that has been eroded (redeposition not considered), provide flux in [1/(s*m^2)], n_target in [1/m^3], t_discharge in [s]
-#Y and flux must be np.arrays containing sputtering yields and ion fluxes for all relevant erosion processes (phys. sputtering by H, O, C, chem. erosion by H, O)
-def calculateDeltaErodedLayer(Y, flux, t_discharge, n_target):                                                               
+#######################################################################################################################################################################
+def calculateDeltaErodedLayer(Y: list, flux: list, t_discharge: int|float, n_target: int|float) -> float:                                                               
+    ''' This function calculates the layer thickness that has been eroded (redeposition not considered) 
+        -> in a certain time interval "t_discharge" in [s] with constant sputtering yields "Y" and ion flux densities "flux" in [1/(s*m^2)]
+        "Y" and "flux" must be np.arrays containing sputtering yields and ion fluxes for all ion species (one value for each species, constant during the interval)
+        -> "Y" includes all relevant erosion processes (phys. sputtering by H, O, C, chem. erosion by H, O)
+        The atomic target density "n_target" is given in [1/m^3]
+        Returns single value for the eroded layer thickness in [m] after time interval "t_discharge"'''
     return sum(Y * flux * t_discharge/n_target)
 
-#Calculation of deposition rate of graphite (incoming C-ions stick with 100% probability), provide flux in [1/(s*m^2)], n_target in [1/m^3]
-#flux must be number representing incident particle flux of C ions
-def calculateDepositionRate(flux, n_target):
+#######################################################################################################################################################################
+def calculateDepositionRate(flux: int|float, n_target: int|float) -> float:
+    ''' This function calculates the deposition rate (sticking coefficient =1)
+        Ion flux densities "flux" (of the target materials ions) in [1/(s*m^2)]
+        -> e.g. graphite target means "flux" of C-ions must be considered and the atomic target density "n_target" in [1/m^3] is the one of graphite
+        Returns single value for the deposition rate in [m/s] at moment x"'''
     return flux/n_target
 
-#Calculation of layer thickness of graphite that has been deposited (incoming C-ions stick with 100% probability), provide flux in [1/(s*m^2)], n_target in [1/m^3], t_discharge in [s]
-#flux must be number representing incident particle flux of C ions
-def calculateDepositionLayerThickness(flux, t_discharge, n_target):
-    return flux * t_discharge/n_target
-
-#Calculation of gross flux of eroded particles (redeposition not considered), provide flux in [1/(s*m^2)], Y and f must be np.arrays for all relevant erosion processes
-def calculateFluxErodedParticlesGross(flux_electron, Y, f, P_redeposition, stickingCoefficient, Y_selfSputtering):                                                          
-    return (flux_electron * np.sum(Y * f))/(1 - P_redeposition * (Y_selfSputtering + 1 - stickingCoefficient))
-
-#Calculation of flux of reposited particles, provide flux in [1/(s*m^2)], Y and f must be np.arrays for all relevant erosion processes
-def calculateFluxRedepositedParticles(flux_electron, Y, f, P_redeposition, stickingCoefficient, Y_selfSputtering):                                                          
-    return (stickingCoefficient * P_redeposition * flux_electron * np.sum(Y * f))/(1 - P_redeposition * (Y_selfSputtering + 1 - stickingCoefficient))
-
-#Calculation of net flux of eroded particles (redeposition considered), provide flux in [1/(s*m^2)], Y and f must be np.arrays for all relevant erosion processes
-def calculateFluxErodedParticlesNet(flux_electron, Y, f, P_redeposition, stickingCoefficient, Y_selfSputtering):                                                          
-    return calculateFluxErodedParticlesGross(flux_electron, Y, f, P_redeposition, stickingCoefficient, Y_selfSputtering) - calculateFluxRedepositedParticles(flux_electron, Y, f, P_redeposition, stickingCoefficient, Y_selfSputtering)
-
 #######################################################################################################################################################################
-#Calculation of Net Erosion Specifically for Divertor Plates according to Ref. 1, NOT READY TO USE YET
-
-#Choose applying lambda_n in dependance of y, z, theta
-def chooseLambdaN(y, z, theta):
-    if y * np.sin(theta) + z * np.cos(theta)<0:
-        return lambda_nl
-    if y * np.sin(theta) + z * np.cos(theta)>0:
-        return lambda_nr
-    else:   #dont know what to return
-        return 1
-
-#Development of electron density and electron temperature
-def developementElectronDensity(n_e_0, y, z, theta, lambda_n):
-    lambda_n = chooseLambdaN(y, z, theta)
-    return n_e_0 * np.exp(-(y * np.sin(theta) + z * np.cos(theta))/lambda_n)
-
-#Development of electron density and electron temperature
-def developementElectronTemperature(T_e_0, y, z, theta, lambda_n):
-    lambda_n = chooseLambdaN(y, z, theta)
-    return T_e_0 * np.exp(-(y * np.sin(theta) + z * np.cos(theta))/lambda_n)
-
-#Calculation of gross erosion particle flux
-def calculateFluxErodedParticlesGrossDivertor():
-    pass
-
-#Calculation of deposition particle flux
-def calculateFluxRedepositedParticlesDivertor(flux_erodedParticles, y, dy):
-    return -flux_erodedParticles(y - dy)
-
-#Calculation of net erosion particle flux
-def calculateFluxErodedParticlesNetDivertor(flux_erodedParticles, y, dy):
-    return flux_erodedParticles(y) - flux_erodedParticles(y - dy)
-
-#Calculation of an estimate for the layer thickness of eroded material at the strike line region
-#Plasma ions exclude carbon impurities!
-def calculateDeltaErodedLayerStrikeline(Y_plasmaIons, flux_plasmaIons, t_discharge, n_target, Y_selfsputtering, probability_promptRedeposition, stickingCoefficient, dy, C=3.5): 
-    return np.tanh(C * dy/abs(lambda_nl)) * (t_discharge * flux_plasmaIons * Y_plasmaIons * (1 - stickingCoefficient * probability_promptRedeposition))/(n_target * (1 - probability_promptRedeposition * (Y_selfsputtering + 1 - stickingCoefficient)))
+def calculateDepositionLayerThickness(flux: int|float, t_discharge: int|float, n_target: int|float) -> float:
+    ''' This function calculates the layer thickness that has been deposited (sticking coefficient =1)
+        -> in a certain time interval "t_discharge" in [s] with constant ion flux densities "flux" (of the target materials ions) in [1/(s*m^2)]
+        -> e.g. graphite target means "flux" of C-ions must be considered and the atomic target density "n_target" in [1/m^3] is the one of graphite
+        Returns single value for the deposited layer thickness in [m] after time interval "t_discharge"'''
+    return flux * t_discharge/n_target
 
 #######################################################################################################################################################################
 #######################################################################################################################################################################

@@ -3,10 +3,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness, depositionRate_dt, depositedLayerThickness, dt, safe):
+def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness, depositionRate_dt, depositedLayerThickness, dt, timesteps, safe):
     ''' plot sputtering yields, erosion rate, total eroded layer thickness, and electron temperature, surface temperature, density over time for one discharge and one langmuir probe
         all input parameters besides "safe" should be provided as 1D lists/arrays representing measurement/calculation values at one position/langmuir probe over the same number of timesteps
         "safe" is a string determining where to save the plot and under which name, e.g. 'results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)'''
+    #corrected time interval ends for erosion 
+    t = []
+    for i in range(1, len(timesteps) + 1):
+        t.append(np.nansum(np.array(timesteps[:i])))
+
     #filter out values for which not all input parameters were measured successfully (they were set to 0, thus Y_0 becomes 0)
     filter = np.array([i != 0 and np.isnan(i)==False for i in Y_0])
     
@@ -29,12 +34,13 @@ def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickn
     ax[1].plot(np.array(dt)[filter], np.array(Y_4)[filter], '-x', label='Y of oxygen')
     
     #third subplot for resulting erosion rates and layer thicknesses
+    #changed1################### replace t by dt
     ax[2].plot(np.array(dt)[filter], np.array(erosionRate_dt)[filter] * 1e9, '-x', label=' $\Delta_{ero}/t$')
-    ax[2].plot(np.array(dt)[filter], np.array(erodedLayerThickness)[filter] * 1e9, '-x', label=' $\Delta_{ero}$')
+    ax[2].plot(np.array(t)[filter], np.array(erodedLayerThickness)[filter] * 1e9, '-x', label=' $\Delta_{ero}$')
     ax[2].plot(np.array(dt)[filter], np.array(depositionRate_dt)[filter] * 1e9, '-x', label=' $\Delta_{dep}/t$')
-    ax[2].plot(np.array(dt)[filter], np.array(depositedLayerThickness)[filter] * 1e9, '-x', label=' $\Delta_{dep}$')
-    ax[2].plot(np.array(dt)[filter], (np.array(erodedLayerThickness)[filter] - np.array(depositedLayerThickness)[filter]) * 1e9, '-x', label=' $\Delta_{ero, net}$')
-
+    ax[2].plot(np.array(t)[filter], np.array(depositedLayerThickness)[filter] * 1e9, '-x', label=' $\Delta_{dep}$')
+    ax[2].plot(np.array(t)[filter], (np.array(erodedLayerThickness)[filter] - np.array(depositedLayerThickness)[filter]) * 1e9, '-x', label=' $\Delta_{ero, net}$')
+    #changed1###################
     ax[0].set_yscale('log')
     ax[1].set_yscale('log')
 

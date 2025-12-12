@@ -1,0 +1,27 @@
+syntax: regexp
+(^|/)\.DS_Store$
+^\.idea$
+\.sublime-
+^nbproject$
+^build$
+patches
+tags
+^docs/_build$
+^dist$
+^[^/]*.egg-info$
+^\.settings$
+~$
+\.bak$
+\.orig$
+\.pyc$
+\.pyo$
+\.swp$
+\.swo$
+\.swn$
+\.tmp$
+^_generated_
+^\.cache_
+desktop\.ini$
+.ipynb_checkpoints
+env
+.pytest_cache
