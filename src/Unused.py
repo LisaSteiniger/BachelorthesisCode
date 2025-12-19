@@ -34,8 +34,8 @@ if __name__ == '__main__':
     #Parameters for net erosion specifically for divertor
     lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
 
-#else:
-#    from Application import e, u, k_B, k, E_TF, E_s, Q_y_chem, C_d_chem, E_thd_chem, E_ths_chem, E_th_chem, lambda_nr, lambda_nl
+else:
+    from src.settings import e, u, k_B, k, E_TF, E_s, Q_y_chem, C_d_chem, E_thd_chem, E_ths_chem, E_th_chem, lambda_nr, lambda_nl
 
 #######################################################################################################################################################################
 def readArchieveDB_ne_ECRH(dischargesCSV: pd.DataFrame):
@@ -384,6 +384,7 @@ def processOP2Dataold(discharge: str,
                       t_upper: list[list[int|float]], 
                       alpha: int|float, 
                       LP_position: list[int|float], 
+                      LP_zeta: list[int|float],
                       m_i: list[int|float], 
                       f_i: list[int|float], 
                       ions: list[str], 
@@ -397,6 +398,7 @@ def processOP2Dataold(discharge: str,
         -> times are given in [s] from trigger t1 of the discharge
         Incident angle of the ions  "alpha" is given in [rad]
         The distance of each langmuir probe from the pumping gap is given in "LP_position" in [m], probe indices 0 - 5 are on TM2h07, 6 - 13 on TM3h01, and 14 - 17 on TM8h01
+        The incident angle of the magnetic field lines on the target is given at each langmuir probe position from the target surface towards the surface normal in "LP_zeta" in [rad], probe indices 0 - 5 are on TM2h07, 6 - 13 on TM3h01, and 14 - 17 on TM8h01
         The ion masses "m_i" are in [kg], the ion concentrations "f_i", and ion names "ions" should have the same length as "m_i"
         The Boltzmann constant "k" must be in [eV/K]
         The atomic target density "n_target" should be provided in [1/m^3]
@@ -431,7 +433,7 @@ def processOP2Dataold(discharge: str,
             timesteps = np.array(timesteps)
 
             #calculate sputtering yields for each ion species ([H, D, T, C, O]), erosion rates, layer thicknesses
-            return_erosion = process.calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, m_i, f_i, ions, k, n_target)
+            return_erosion = process.calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, LP_zeta[LP_position[position - 1]], m_i, f_i, ions, k, n_target)
             if type(return_erosion) == str:
                 print(return_erosion)
                 exit()

@@ -32,9 +32,9 @@ if __name__ == '__main__':
 
     #Parameters for net erosion specifically for divertor
     lambda_nr, lambda_nl = 1, -1     #nonsense values, just signs are correct
-
 else:
-    from Application import e, u, k_B, k, E_TF, E_s, Q_y_chem, C_d_chem, E_thd_chem, E_ths_chem, E_th_chem, lambda_nr, lambda_nl
+    from src.settings import e, k_B, k, E_TF, E_s, Q_y_chem, C_d_chem, E_thd_chem, E_ths_chem, E_th_chem, lambda_nr, lambda_nl
+
 #######################################################################################################################################################################
 #######################################################################################################################################################################
 #Calculation of the Physical Sputtering Yield of Graphite under Bombardement with Hydrogen, Deuterium, Tritium , Helium, and Carbon Particles (self-sputtering)
@@ -353,19 +353,21 @@ def calculateTotalErosionYield(incidentParticle: str, T_i: int|float, targetMate
 #######################################################################################################################################################################
 #Calculation of Fluxes of Incident Ions and Eroded Particles, and Thickness of Eroded Layer according to Ref. 1
 
-def calculateFluxIncidentIonFromSpeed(c_w: int|float, n_e: int|float) -> float:
-    ''' This function calculates the incident ion flux density from ion velocity "c_w" in [m/s] and the electron density "n_e" in [1/m^3]
+def calculateFluxIncidentIonFromSpeed(c_w: int|float, n_e: int|float, zeta: int|float) -> float:
+    ''' This function calculates the incident ion flux density from ion velocity "c_w" in [m/s] and the electron density "n_e" in [1/m^3] 
+        "zeta" is the incident angle of the magnetig field lines on the target measured form the surface towards the surface normal
         Returns single value for flux density in [1/s*m^2]
         muss da noch * f mit rein für einzelne Ionenflüsse?'''
-    return c_w * n_e  
+    return c_w * n_e * np.sin(zeta)
 
 #######################################################################################################################################################################
-def calculateFluxIncidentIon(T_e: int|float, T_i: int|float, m_i: int|float, n_e: int|float, f: int|float) -> float:
+def calculateFluxIncidentIon(zeta: int|float, T_e: int|float, T_i: int|float, m_i: int|float, n_e: int|float, f: int|float) -> float:
     ''' This function calculates the incident ion flux density from electron and ion temperature "T_e" and "T_i" in [K]
         ion mass m_i in [kg], the electron density at last closed flux surface "n_e" in [1/m^3], ion concentration "f"
         Boltzmann constant "k_B" in [J/K]
+        "zeta" is the incident angle of the magnetig field lines on the target measured form the surface towards the surface normal
         Returns single value for flux density in [1/s*m^2]'''
-    return np.sqrt(k_B * (T_e + T_i)/m_i) * n_e * f
+    return np.sqrt(k_B * (T_e + T_i)/m_i) * n_e * f * np.sin(zeta)
 
 #######################################################################################################################################################################
 def calculateErosionRate(Y: list, flux: list, n_target: int|float) -> float:                                                               

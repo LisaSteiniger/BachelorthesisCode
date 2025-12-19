@@ -217,9 +217,11 @@ def compareMarkus(safe: str, tableOverview: pd.DataFrame) -> pd.DataFrame:
     return tableOverview
 
 #######################################################################################################################################################################
-def processMarkusData(m_i: list[int|float], f_i: list[int|float], ions: list[str], k: int|float, n_target: int|float, interval: int = 50) -> None: 
+def processMarkusData(alpha: int|float, LP_zeta: list[int|float], m_i: list[int|float], f_i: list[int|float], ions: list[str], k: int|float, n_target: int|float, interval: int = 50) -> None: 
     ''' This function fully processes M. Kandlers data sets from reading, over processing them to calculating sputtering yields and layer thicknesses
         -> reads data for exemplary discharges from OP1.2b from downloaded files, processes it and writes it to an overview .csv file together with calculated values for erosion related quamtities
+        "alpha" is the incident angle of ions on the target in [rad] (measured from the surface normal)
+        The incident angle of the magnetic field lines on the target is given at each langmuir probe position from the target surface towards the surface normal in "LP_zeta" in [rad] 
         "m_i", "f_i", "ions" must be masses in [kg], concentrations [unitless], and names of impurities (same length of the lists) 
         "k" is the Boltzmann constant in [eV/K]
         "n_target" is the atomic density of the divertor target in [1/m^3]
@@ -297,7 +299,7 @@ def processMarkusData(m_i: list[int|float], f_i: list[int|float], ions: list[str
         
         #calculates erosion related quantities and writes to .csv file saved as "safe" together with used measurement data
         safe = 'results/compareMarkus/tableCompareMarkus_{exp}.{discharge}_{divertorUnit}_{moduleFinger}.csv'.format(exp=settings_Gao['exp'], discharge=settings_Gao['discharge'], divertorUnit=settings_Gao['divertor'], moduleFinger=settings_Gao['finger'])
-        process.calculateErosionRelatedQuantitiesSeveralPositions(T_s_values.T, T_e_values.T, T_i_values.T, n_e_values.T, dt, safe, m_i, f_i, ions, k, n_target, compareResults=True)
+        calculateErosionRelatedQuantitiesSeveralPositions(T_s_values.T, T_e_values.T, T_i_values.T, n_e_values.T, alpha, LP_zeta, dt, safe, m_i, f_i, ions, k, n_target, compareResults=True)
 
 #######################################################################################################################################################################
 def calculateErosionRelatedQuantitiesSeveralPositions(T_s_values: list[list], 
@@ -306,6 +308,7 @@ def calculateErosionRelatedQuantitiesSeveralPositions(T_s_values: list[list],
                                                       n_e_values: list[list], 
                                                       dt: list, 
                                                       alpha: int|float, 
+                                                      LP_zeta: list[int:float],
                                                       safe: str, 
                                                       m_i: list[int|float], 
                                                       f_i: list[int|float], 
@@ -320,6 +323,7 @@ def calculateErosionRelatedQuantitiesSeveralPositions(T_s_values: list[list],
         -> electron density ne in [1/m^3], electron temperature Te and ion temperature Ti in [eV], surface temperature of the target Ts in [K]
         "dt" is a one dimensional array holding the corresponding time steps to "*_values" in [s]
         "alpha" is the ion incident angle in rad
+        The incident angle of the magnetic field lines on the target is given at each langmuir probe position from the target surface towards the surface normal in "LP_zeta" in [rad]
         "safe" determines where to save the resulting .csv file
         "m_i", "f_i", "ions" must be masses in [kg], concentrations [unitless], and names of impurities (same length of the lists) 
         "k" is the Boltzmann constant in [eV/K]
@@ -338,7 +342,7 @@ def calculateErosionRelatedQuantitiesSeveralPositions(T_s_values: list[list],
             position_counter += 1
 
             #returns arrays over all time steps at this location
-            return_erosion = process.calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, dt, alpha, m_i, f_i, ions, k, n_target)
+            return_erosion = process.calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, dt, alpha, LP_zeta[position_counter-1], m_i, f_i, ions, k, n_target)
             if type(return_erosion) == str:
                 continue
             Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness, depositionRate_dt, depositedLayerThickness_dt, depositedLayerThickness = return_erosion

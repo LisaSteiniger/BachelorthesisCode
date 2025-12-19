@@ -16,23 +16,27 @@ from src.heatflux_T import heatflux_T_download
 def getRuntimePerConfiguration(configurations: list[str] =['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
                                                            'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
                                                            'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520'],
-                               dischargeIDcsv: str ='results/configurations/dischargeList_OP223_', 
-                               safe: str ='results/configurations/configurationRuntimes.csv') -> None:
+                               campaign: str ='',
+                               dischargeIDcsv: str ='results/configurations/dischargeList_', 
+                               safe: str ='results/configurations/configurationRuntimes') -> None:
     ''' This function determines the absolute and relative runtime of each configuration over all discharges given by .csv files saved under "dischargeIDcsv" + "*", the results are written to .csv file saved under "safe"
         Each configuration has its own file, so function iterates over those files and sums up the number of discharges and their durations
-        The DataFrame from each file contains all discharges of this configuration and has the keys 'dischargeID', 'duration', 'configuration', and 'overviewTables' (default safe for calculation tables of a discharge)'''
+        The DataFrame from each file contains all discharges of this configuration and has the keys 'dischargeID', 'duration', 'configuration', and 'overviewTables' (default safe for calculation tables of a discharge)
+        "campaign" determines the OP being investigated (either 'OP22', 'OP23', or '' for both of them)'''
 
     runtimes = pd.DataFrame({})
     absoluteRuntimes, relativeRuntimes, absoluteNumberOfDischarges, relativeNumberOfDischarges = [], [], [], []
     totalRuntime = 0
     totalNumber = 0
 
+    if campaign == '':
+        campaign = 'OP223'
     for configuration in configurations:
-        if not os.path.isfile(dischargeIDcsv + configuration + '.csv'): #if there is no file, no discharge were found
+        if not os.path.isfile(dischargeIDcsv + campaign + '_' + configuration + '.csv'): #if there is no file, no discharge were found
             absoluteRuntimes.append(0)
             absoluteNumberOfDischarges.append(0)
         else:
-            dischargeList = pd.read_csv(dischargeIDcsv + configuration + '.csv', sep=';')
+            dischargeList = pd.read_csv(dischargeIDcsv + campaign + '_' + configuration + '.csv', sep=';')
             absoluteRuntimes.append(np.nansum(dischargeList['duration']))
             absoluteNumberOfDischarges.append(len(dischargeList['dischargeID']))
         totalRuntime += absoluteRuntimes[-1]
@@ -56,7 +60,7 @@ def getRuntimePerConfiguration(configurations: list[str] =['EIM000-2520', 'EIM00
     runtimes['relative runtime (%)'] = relativeRuntimes
     runtimes = runtimes.sort_values('absolute runtime (s)')
 
-    runtimes.to_csv(safe, sep=';')
+    runtimes.to_csv(safe + campaign + '.csv', sep=';')
     configurations.remove('all')
 
 #######################################################################################################################################################################
@@ -184,7 +188,7 @@ def readSurfaceTemperatureFramesFromIRcam(dischargeID: str,
         return [np.array(T_data[0]).T, np.array(T_data[1]).T, comment]
     else:
         return [np.array(T_data[0]).T, comment]
-    
+
 #######################################################################################################################################################################
 def readLangmuirProbeDataFromXdrive(dischargeID: str) -> str|list[list]:
     ''' This functions reads the electron density and electron temperature measured by the pop-up Langmuir Probes in "dischargeID" from xdrive
@@ -263,12 +267,15 @@ def readLangmuirProbeDataFromXdrive(dischargeID: str) -> str|list[list]:
 #######################################################################################################################################################################        
 def readAllShotNumbersFromLogbook(config: str, 
                                   filterSelected: str, 
+                                  q_add: str,
                                   filesExist: bool =False, 
-                                  safe: str ='results/configurations/dischargeList_OP223_', 
+                                  safe: str ='results/configurations/dischargeList', 
                                   overviewTableLink: str ='results/calculationTables/results_') -> pd.DataFrame|str:
     ''' This function is responsible for finding all discharges in the Logbook according to the given filter in OP2.2 and OP2.3
         "config" applies internal configuration filter
         "filterSelected" is externally given filter (no conditioning, no gas valve tests, no sniffer tests,...)
+        "q_add" is additional time filter for the year in string format
+        -> 'OP22' means 2024, 'OP23' means 2025, and '' means 2024-2025
         "filesExist" determines, if possibly existing files with discharges for that configuration are overwritten or read out and returned
         "safe" is the basic structure of the path where the created .csv file is saved
         "overviewTableLink" is the basic structure of the path where latter calculation tables for a discharge are going to be safed
@@ -278,11 +285,13 @@ def readAllShotNumbersFromLogbook(config: str,
         keys: "configuration", "dischargeID", "duration", "duration_planned", "durationHeating", and default safe for calculation tables "overviewTable"
         "duration" is time difference between trigger t1 and t4, "duration_planned" is planned ECRH duration, "durationHeating" is summed duration of ECRH and NBI
         DataFrame is saved as .csv file under modified "safe"'''
+    if q_add == '':
+        q_add = 'OP223'
     
     if filesExist:  #existing files are read out, missing ones are created
-        if os.path.isfile(safe + config + '.csv'):
+        if os.path.isfile(safe + '_' + q_add + '_' + config + '.csv'):
             print('confiuration discharge file exists and is read out')
-            return pd.read_csv(safe + config + '.csv', sep=';')
+            return pd.read_csv(safe + '_' + q_add + '_' + config + '.csv', sep=';')
         
     else:           #existing files are overwritted, missing ones are created
         pass
@@ -296,7 +305,13 @@ def readAllShotNumbersFromLogbook(config: str,
 
     #combine neccessary filters   
     q = filterSelected + q7 
-    p = {'time':'[2024 TO 2025]', 'size':'9999', 'q' : q }   # OP2.2 and OP2.3
+    if q_add == 'OP22':
+        p = {'time':'[2024 TO 2024]', 'size':'9999', 'q' : q }   # OP2.2
+    elif q_add == 'OP23':
+        p = {'time':'[2025 TO 2025]', 'size':'9999', 'q' : q }   # OP2.3
+    elif q_add == 'OP223':
+        q_add = 'OP223'
+        p = {'time':'[2024 TO 2025]', 'size':'9999', 'q' : q }   # OP2.2 and OP2.3
 
     dischargeIDs, duration_Trigger, duration_planned, duration_ECRH_NBI, overviewTables = [], [], [], [], []    
 
@@ -419,7 +434,7 @@ def readAllShotNumbersFromLogbook(config: str,
     configuration = [config] * len(dischargeIDs)
 
     dischargeTable = pd.DataFrame({'configuration': configuration, 'dischargeID': dischargeIDs, 'duration': duration_Trigger, 'duration_planned': duration_planned, 'durationHeating': duration_ECRH_NBI, 'overviewTable': overviewTables})
-    dischargeTable.to_csv(safe + config + '.csv', sep=';')
+    dischargeTable.to_csv(safe + '_' + q_add + '_' + config + '.csv', sep=';')
     
     return dischargeTable
 

@@ -17,6 +17,7 @@ def calculateErosionRelatedQuantitiesOnePosition(T_e: list[int|float],
                                                  n_e: list[int|float], 
                                                  dt: list[int|float], 
                                                  alpha: int|float, 
+                                                 zeta: int|float,
                                                  m_i: list[int|float], 
                                                  f_i: list[int|float], 
                                                  ions:list[str], k: int|float, 
@@ -27,6 +28,7 @@ def calculateErosionRelatedQuantitiesOnePosition(T_e: list[int|float],
         Electron density "ne" is given in [1/m^3], electron and ion temperature "Te" and "Ti" in [eV]
         "dt" are the durations of each time step in [s], "Ts" is the surface temperature of the target in [K]
         The incident angle "alpha" of the ions is given in [rad]
+        "zeta" is the incident angle of the magnetic field lines on the target measured form the surface towards the surface normal
         The ion masses "m_i" in [kg], the concentrations "f" of the ions, and the ion names "ions" are array like objects of same length
         The Boltzmann constant "k" is provided in [eV/K]
         The atomic target density "n_target" should be given in [1/m^3]
@@ -40,7 +42,7 @@ def calculateErosionRelatedQuantitiesOnePosition(T_e: list[int|float],
         #calculate fluxes for all ion species [H, D, T, C, O] at each single time step (number of time steps = len(dt))
         fluxes = []
         for m, f in zip(m_i, f_i):
-            fluxes.append(calc.calculateFluxIncidentIon(T_e/k, T_i/k, m, n_e, f)) #T_e and T_i must be in [K], so conversion from [eV] by dividing through k
+            fluxes.append(calc.calculateFluxIncidentIon(zeta, T_e/k, T_i/k, m, n_e, f)) #T_e and T_i must be in [K], so conversion from [eV] by dividing through k
         fluxes = np.array(fluxes)   
         #nested array with fluxes[i] is representing fluxes for one ion species at all times and fluxes.T[i] representing fluxes of all ion species for one single time step 
 
@@ -120,6 +122,7 @@ def processOP2Data(discharge: str,
                    index_upper: list[int],
                    alpha: int|float, 
                    LP_position: list[int|float], 
+                   LP_zeta: list[int|float], 
                    m_i: list[int|float], 
                    f_i: list[int|float], 
                    ions: list[str], 
@@ -134,6 +137,7 @@ def processOP2Data(discharge: str,
         Indices of active Langmuir Probes are given by "index_*", e.g "index_lower" = [0, 1, 2, 3, 5, 6, 7] means that LP0 - LP4 and LP5 - LP7 measured something (numbering as in "LP_position") 
         Incident angle of the ions  "alpha" is given in [rad]
         The distance of each langmuir probe from the pumping gap is given in "LP_position" in [m], probe indices 0 - 5 are on TM2h07, 6 - 13 on TM3h01, and 14 - 17 on TM8h01
+        The incident angle of the magnetic field lines on the target is given at each langmuir probe position from the target surface towards the surface normal in "LP_zeta" in [rad], probe indices 0 - 5 are on TM2h07, 6 - 13 on TM3h01, and 14 - 17 on TM8h01
         The ion masses "m_i" are in [kg], the ion concentrations "f_i", and ion names "ions" should have the same length as "m_i"
         The Boltzmann constant "k" must be in [eV/K]
         The atomic target density "n_target" should be provided in [1/m^3]
@@ -176,7 +180,7 @@ def processOP2Data(discharge: str,
             #changed1#####################
 
             #calculate sputtering yields for each ion species ([H, D, T, C, O]), erosion rates, layer thicknesses
-            return_erosion = calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, m_i, f_i, ions, k, n_target)
+            return_erosion = calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, LP_zeta[LP_index], m_i, f_i, ions, k, n_target)
             if type(return_erosion) == str: #if input arrays do not have the same length, function will fail and return error string
                 print(return_erosion)
                 exit()
@@ -286,6 +290,7 @@ def intrapolateMissingValues(discharge: str,
                              overviewTable: pd.DataFrame, 
                              LPindices: list[list[str]], 
                              alpha: int|float, 
+                             LP_zeta: list[int|float],
                              m_i: list[int|float], 
                              f_i: list[int|float], 
                              ions: list[str], 
@@ -301,6 +306,7 @@ def intrapolateMissingValues(discharge: str,
         -> [[LP1, firstIndex1, lastindex1], [LP2, firstindex2, last index2], ...] 
         -> ATTENTION: ALL ELEMENTS OF LPindices ARE STRINGS
         Incident angle of the ions  "alpha" is given in [rad]
+        The incident angle of the magnetic field lines on the target is given at each langmuir probe position from the target surface towards the surface normal in "LP_zeta" in [rad], probe indices 0 - 5 are on TM2h07, 6 - 13 on TM3h01, and 14 - 17 on TM8h01
         The ion masses "m_i" are in [kg], the ion concentrations "f_i", and ion names "ions" should have the same length as "m_i"
         The Boltzmann constant "k" must be in [eV/K]
         The atomic target density "n_target" should be provided in [1/m^3]
@@ -397,7 +403,7 @@ def intrapolateMissingValues(discharge: str,
     Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness, depositionRate_dt, depositedLayerThickness_dt, depositedLayerThickness = [], [], [], [], [], [], [], [], []
 
     for T_e, T_i, T_s, n_e, LPindex in zip(Te_list, Te_list, Ts_list, ne_list, LPindices):
-        return_erosion = calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, m_i, f_i, ions, k, n_target)
+        return_erosion = calculateErosionRelatedQuantitiesOnePosition(T_e, T_i, T_s, n_e, timesteps, alpha, LP_zeta[LPindex[0][5:]], m_i, f_i, ions, k, n_target)
         if type(return_erosion) == str:
             print(return_erosion)
             exit()
@@ -450,6 +456,7 @@ def calculateTotalErodedLayerThicknessOneDischarge(discharge: str,
                                                    duration: int|float,
                                                    overviewTable: pd.DataFrame,  
                                                    alpha: int|float, 
+                                                   LP_zeta: list[int|float],
                                                    m_i: list[int|float], 
                                                    f_i: list[int|float], 
                                                    ions: list[str], 
@@ -463,6 +470,7 @@ def calculateTotalErodedLayerThicknessOneDischarge(discharge: str,
         "overviewTable" is initially Dataframe with keys 'LangmuirProbe', 'time', ne, ... as in 'results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)
         -> overviewTable is by default not intrapolated ("intrapolated"=False), so intrapolation happens internally
         Incident angle of the ions  "alpha" is given in [rad]
+        The incident angle of the magnetic field lines on the target is given at each langmuir probe position from the target surface towards the surface normal in "LP_zeta" in [rad], probe indices 0 - 5 are on TM2h07, 6 - 13 on TM3h01, and 14 - 17 on TM8h01
         The ion masses "m_i" are in [kg], the ion concentrations "f_i", and ion names "ions" should have the same length as "m_i"
         The Boltzmann constant "k" must be in [eV/K]
         The atomic target density "n_target" should be provided in [1/m^3]
@@ -477,7 +485,7 @@ def calculateTotalErodedLayerThicknessOneDischarge(discharge: str,
 
     #intrapolate overviewTable in required
     if intrapolated == False:
-        overviewTable = intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, m_i, f_i, ions, k, n_target, defaultValues, plotting)
+        overviewTable = intrapolateMissingValues(discharge, overviewTable, LPindices, alpha, LP_zeta, m_i, f_i, ions, k, n_target, defaultValues, plotting)
     
     #will hold the total erosion layer thickness at each LP position after discharge
     erosion = []
@@ -529,6 +537,7 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(config: str,
                                                         durations: list[int|float], 
                                                         overviewTables: list[str], 
                                                         alpha: int|float, 
+                                                        LP_zeta: list[int|float],
                                                         m_i: list[int|float], 
                                                         f_i: list[int|float], 
                                                         ions: list[str], 
@@ -543,6 +552,7 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(config: str,
         -> leads to .csv files holding a Dataframe with keys 'LangmuirProbe', 'time', 'ne', ...
         -> overviewTable is by default not intrapolated ("intrapolated"=False), so intrapolation happens internally
         Incident angle of the ions  "alpha" is given in [rad]
+        The incident angle of the magnetic field lines on the target is given at each langmuir probe position from the target surface towards the surface normal in "LP_zeta" in [rad], probe indices 0 - 5 are on TM2h07, 6 - 13 on TM3h01, and 14 - 17 on TM8h01
         The ion masses "m_i" are in [kg], the ion concentrations "f_i", and ion names "ions" should have the same length as "m_i"
         The Boltzmann constant "k" must be in [eV/K]
         The atomic target density "n_target" should be provided in [1/m^3]
@@ -571,14 +581,14 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(config: str,
 
         if not intrapolated:
             overviewTable = pd.read_csv(overviewTable, sep=';')
-            erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, defaultValues, intrapolated, plotting)
+            erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, LP_zeta, m_i, f_i, ions, k, n_target, defaultValues, intrapolated, plotting)
         else:
             if not os.path.isfile('results/calculationTablesNew/' + overviewTable.split('/')[-1]):
                 overviewTable = pd.read_csv(overviewTable, sep=';')
-                erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, defaultValues, intrapolated=False, plotting=plotting)
+                erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, LP_zeta, m_i, f_i, ions, k, n_target, defaultValues, intrapolated=False, plotting=plotting)
             else:
                 overviewTable = pd.read_csv('results/calculationTablesNew/' + overviewTable.split('/')[-1], sep = ';')
-                erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, m_i, f_i, ions, k, n_target, defaultValues, intrapolated, plotting)
+                erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, LP_zeta, m_i, f_i, ions, k, n_target, defaultValues, intrapolated, plotting)
         
         for erosionLP in erosion:
             if 'lower0' == erosionLP[0]:
@@ -784,11 +794,13 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(config: str,
 
 #######################################################################################################################################################################        
 def calculateTotalErodedLayerThicknessWholeCampaignPerConfig(config: str, 
+                                                             campaign: str ='',
                                                              erosionTable: str ='results/erosionMeasuredConfig/totalErosionAtPosition_', 
-                                                             dischargeOverview: str= 'results/configurations/dischargeList_OP223') -> str:
+                                                             dischargeOverview: str= 'results/configurations/dischargeList_') -> str:
     ''' This function calculates total erosion/deposition layer thickness for all LPs that occurred during discharges in configuration "config" 
         -> one value for erosion/deposition layer thickness of each LP
         -> known total erosion/deposition layer thicknesses are extrapolated to whole plasma time t_total by multiplying known values with t_total/t_known 
+        "campaign" defines the campaign being looked at ('OP22', 'OP23', or '' for both)
         "erosionTable" is the structure of the path where a .csv file is saved
         -> that file contains a DataFrame with the total erosion/deposition layer thicknesses of all recorded discharges of that configuration (keys like 'discharge', 'duration' 'lower0_erosion', 'lower0_deposition')
         -> such a file can be created by running "calculateTotalErodedLayerThicknessSeveralDischarges"
@@ -797,11 +809,13 @@ def calculateTotalErodedLayerThicknessWholeCampaignPerConfig(config: str,
 
         Returns string that everything has been calculated successfully
         -> saves the calculation results in .csv file under 'results/erosionExtrapolatedConfig/totalErosionAtPositionWholeCampaign_{config}.csv'.format(config=config)'''
-    if not os.path.isfile(erosionTable + '{config}.csv'.format(config=config)) or not os.path.isfile(dischargeOverview + '_{config}.csv'.format(config=config)):
+    if campaign == '':
+        campaign = 'OP223'
+    if not os.path.isfile(erosionTable + '{config}.csv'.format(config=config)) or not os.path.isfile(dischargeOverview + campaign + '_{config}.csv'.format(config=config)):
         return 'file missing for ' + config
     
     erosionTable = pd.read_csv(erosionTable + '{config}.csv'.format(config=config), sep=';')
-    dischargeOverview = pd.read_csv(dischargeOverview + '_{config}.csv'.format(config=config), sep=';')
+    dischargeOverview = pd.read_csv(dischargeOverview + campaign + '_{config}.csv'.format(config=config), sep=';')
 
     LP_erosion, LP_deposition, erosion_knownData, deposition_knownData, time_knownErosion, time_knownDeposition, erosion_total, deposition_total = [], [], [], [], [], [], [], []
     totalTime = np.nansum(np.array(dischargeOverview['duration']))
@@ -862,12 +876,17 @@ def calculateTotalErodedLayerThicknessWholeCampaignPerConfig(config: str,
 #######################################################################################################################################################################        
 def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str], 
                                                     LP_position: list[int|float], 
+                                                    campaign: str ='',
+                                                    T_default: str ='',
                                                     totalErosionFiles: str ='results/erosionExtrapolatedConfig/totalErosionAtPositionWholeCampaign_',
                                                     configurationOverview: str ='inputFiles/Overview4.csv') -> None:
     ''' This function calculates total erosion/deposition layer thickness for all LPs that occurred during the whole campaign in all configurations listed in "configurationList"
         -> if for a configuration no data exists at a LP position, that can not be taken into account)
         -> one value for erosion/deposition layer thickness of each LP by adding up the values of each configuration 
         The distance of each langmuir probe from the pumping gap is given in "LP_position" in [m], probe indices 0 - 5 are on TM2h07, 6 - 13 on TM3h01, and 14 - 17 on TM8h01
+        "campaign" is introducing which campaigns are investigated 
+        -> '' means all available campaigns, otherwise type 'OP22' or 'OP23'
+        "T_default" defines treatment of missing T_s values (if '' this means T_s is set to 320K)
         "totalErosionFiles" is the structure of the path where a .csv file is saved
         -> that file contains a DataFrame with the total erosion/deposition layer thicknesses of a configuration (keys like 'LP', 'erosion_total' 'netErosion_total', 'deposition_total')
         -> such a file can be created by running "calculateTotalErodedLayerThicknessWholeCampaignPerConfig"
@@ -911,7 +930,7 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
     plt.legend()
     plt.xlabel('distance from pumping gap (m)')
     plt.ylabel('total layer thickness (m)')
-    plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsLowIota.png', bbox_inches='tight')
+    plt.savefig('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositionsLowIota.png'.format(campaign=campaign, Ts='_'+T_default+'_'), bbox_inches='tight')
     plt.show()
     plt.close()
 
@@ -925,21 +944,30 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
     plt.legend()
     plt.xlabel('distance from pumping gap (m)')
     plt.ylabel('total layer thickness (m)')
-    plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsHighIota.png', bbox_inches='tight')
+    plt.savefig('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositionsHighIota.png'.format(campaign=campaign, Ts='_'+T_default+'_'), bbox_inches='tight')
     plt.show()
     plt.close()
 
     #end of: for not extraplated values -> missing configurations are missing##############
     
     #for extraplated values -> extrapolate values for missing configurations with same AAA in AAA+-XXXX ###############
+    configOverview = pd.read_csv(configurationOverview, sep=';')
     config_short = []
+    config_iota = []
+    iota_problem = []
     for config in configurationList:
         if config not in config_missing:
-            if config[:3] not in config_short:
-                config_short.append(config[:3])
-
+            if config[:3] + config[6] not in config_short:
+                config_short.append(config[:3] + config[6])
+                i = list(configOverview['configuration']).index(config)
+                config_iota.append(configOverview['iota'][i])
+            else:
+                i = config_short.index(config[:3] + config[6])
+                if config_iota[i] != configOverview['iota'][list(configOverview['configuration']).index(config)]:
+                    iota_problem.append(config_short[i])
+    print(iota_problem)
     dataOverview2 = pd.DataFrame({'LP': dataOverview['LP']})
-    
+
     for config_3 in config_short:
         duration_total_config = 0
         duration_erosion_known_config = []
@@ -957,7 +985,7 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
             duration_erosion = 0
 
             for config in configurationList:
-                if config[:3] != config_3:
+                if config[:3] + config[6] != config_3:
                     continue
                 if config in config_missing:
                     continue
@@ -1012,72 +1040,78 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
     #end of: for extraplated values -> extrapolate values for missing configurations with same AAA in AAA+-XXXX ###############
 
     #for extraplated values -> extrapolate values for missing configurations generally##################
-    duration_total = 0
-    erosion_total_known = []
-    deposition_total_known = []
-    duration_erosion_known = []
-    duration_deposition_known = []
-    erosion_total = []
-    deposition_total = []
-
-    for LP in range(len(dataOverview2['LP'])):
-        erosion = 0
-        deposition = 0
-        duration_deposition = 0
-        duration_erosion = 0
-
-        for config in configurationList:
-            if config in config_missing:
-                continue
-            if list(dataOverview2[config + '_erosion'])[LP] != 0 and not np.isnan(list(dataOverview2[config + '_erosion'])[LP]):
-                erosion += list(dataOverview2[config + '_erosion'])[LP]
-                duration_erosion += list(dataOverview2[config + '_duration'])[LP]
-            if list(dataOverview2[config + '_deposition'])[LP] != 0 and not np.isnan(list(dataOverview2[config + '_deposition'])[LP]):
-                deposition += list(dataOverview2[config + '_deposition'])[LP]
-                duration_deposition += list(dataOverview2[config + '_duration'])[LP]
-            if LP == 0:
-                duration_total += list(dataOverview2[config + '_duration'])[0]
-
-        erosion_total_known.append(erosion)
-        deposition_total_known.append(deposition)
-        duration_erosion_known.append(duration_erosion)     
-        duration_deposition_known.append(duration_deposition)  
-        if duration_erosion != 0:
-            erosion_total.append(erosion * duration_total/duration_erosion)   
-        else: 
-            erosion_total.append(0)
-        if duration_deposition != 0:
-            deposition_total.append(deposition * duration_total/duration_deposition)   
-        else:
-            deposition_total.append(0)
-
-    #copy dataframe dataOverview but write extrapolated values to it
-    dataOverview3 = pd.DataFrame({'LP': dataOverview['LP']})
-    for config in configurationList:
-        if config in config_missing:
-                continue
-        erosion, deposition, netErosion = [], [], []
+    erosion_total, deposition_total = np.array([0.] * 36), np.array([0.] * 36)
+    for iota in ['low', 'standard', 'high']:
+        duration_total = 0
+        erosion_total_known = []
+        deposition_total_known = []
+        duration_erosion_known = []
+        duration_deposition_known = []
+        erosion_total_iota = []
+        deposition_total_iota = []
 
         for LP in range(len(dataOverview2['LP'])):
-            if list(dataOverview2[config + '_erosion'])[LP] == 0 or np.isnan(list(dataOverview2[config + '_erosion'])[LP]):
-                erosion.append(erosion_total[LP] * list(dataOverview2[config + '_duration'])[LP]/duration_total)
+            erosion = 0
+            deposition = 0
+            duration_deposition = 0
+            duration_erosion = 0
+
+            for config in configurationList:
+                if config in config_missing:
+                    continue
+                if configOverview['iota'][list(configOverview['configuration']).index(config)] != iota:
+                    continue
+                if list(dataOverview2[config + '_erosion'])[LP] != 0 and not np.isnan(list(dataOverview2[config + '_erosion'])[LP]):
+                    erosion += list(dataOverview2[config + '_erosion'])[LP]
+                    duration_erosion += list(dataOverview2[config + '_duration'])[LP]
+                if list(dataOverview2[config + '_deposition'])[LP] != 0 and not np.isnan(list(dataOverview2[config + '_deposition'])[LP]):
+                    deposition += list(dataOverview2[config + '_deposition'])[LP]
+                    duration_deposition += list(dataOverview2[config + '_duration'])[LP]
+                if LP == 0:
+                    duration_total += list(dataOverview2[config + '_duration'])[0]
+
+            erosion_total_known.append(erosion)
+            deposition_total_known.append(deposition)
+            duration_erosion_known.append(duration_erosion)     
+            duration_deposition_known.append(duration_deposition)  
+            if duration_erosion != 0:
+                erosion_total_iota.append(erosion * duration_total/duration_erosion)   
+            else: 
+                erosion_total_iota.append(0)
+            if duration_deposition != 0:
+                deposition_total_iota.append(deposition * duration_total/duration_deposition)   
             else:
-                erosion.append(dataOverview2[config + '_erosion'][LP])
+                deposition_total_iota.append(0)
 
-            if list(dataOverview2[config + '_deposition'])[LP] == 0 or np.isnan(list(dataOverview2[config + '_deposition'])[LP]):
-                deposition.append(deposition_total[LP] * list(dataOverview2[config + '_duration'])[LP]/duration_total)
-            else:
-                deposition.append(list(dataOverview2[config + '_deposition'])[LP])
+        #copy dataframe dataOverview but write extrapolated values to it
+        dataOverview3 = pd.DataFrame({'LP': dataOverview['LP']})
+        for config in configurationList:
+            if config in config_missing:
+                    continue
+            erosion, deposition, netErosion = [], [], []
 
-            netErosion.append(erosion[-1] - deposition[-1])
+            for LP in range(len(dataOverview2['LP'])):
+                if list(dataOverview2[config + '_erosion'])[LP] == 0 or np.isnan(list(dataOverview2[config + '_erosion'])[LP]):
+                    erosion.append(erosion_total_iota[LP] * list(dataOverview2[config + '_duration'])[LP]/duration_total)
+                else:
+                    erosion.append(dataOverview2[config + '_erosion'][LP])
 
-        dataOverview3[config + '_erosion'] = erosion
-        dataOverview3[config + '_deposition'] = deposition
-        dataOverview3[config + '_netErosion'] = netErosion
-        dataOverview3[config + '_duration'] = dataOverview2[config + '_duration']
-    
-    erosion_total = np.array(erosion_total)
-    deposition_total = np.array(deposition_total)
+                if list(dataOverview2[config + '_deposition'])[LP] == 0 or np.isnan(list(dataOverview2[config + '_deposition'])[LP]):
+                    deposition.append(deposition_total_iota[LP] * list(dataOverview2[config + '_duration'])[LP]/duration_total)
+                else:
+                    deposition.append(list(dataOverview2[config + '_deposition'])[LP])
+
+                netErosion.append(erosion[-1] - deposition[-1])
+
+            dataOverview3[config + '_erosion'] = erosion
+            dataOverview3[config + '_deposition'] = deposition
+            dataOverview3[config + '_netErosion'] = netErosion
+            dataOverview3[config + '_duration'] = dataOverview2[config + '_duration']
+        erosion_total = np.hstack(np.nansum(np.dstack((np.array(erosion_total_iota), erosion_total)), 2))
+        deposition_total = np.hstack(np.nansum(np.dstack((np.array(deposition_total_iota), deposition_total)), 2))
+
+    #erosion_total = np.array(erosion_total)
+    #deposition_total = np.array(deposition_total)
 
     #plot low iota, extrapolated
     plt.plot(LP_position[:14], 0 - erosion_total[:14], 'b--', label='erosion lower divertor unit')
@@ -1089,7 +1123,7 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
     plt.legend()
     plt.xlabel('distance from pumping gap (m)')
     plt.ylabel('total layer thickness (m)')
-    plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsLowIotaExtrapolated.png', bbox_inches='tight')
+    plt.savefig('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositionsLowIotaExtrapolated.png'.format(campaign=campaign, Ts='_'+T_default+'_'), bbox_inches='tight')
     plt.show()
     plt.close()
 
@@ -1103,11 +1137,133 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
     plt.legend()
     plt.xlabel('distance from pumping gap (m)')
     plt.ylabel('total layer thickness (m)')
-    plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsHighIotaExtrapolated.png', bbox_inches='tight')
+    plt.savefig('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositionsHighIotaExtrapolated.png'.format(campaign=campaign, Ts='_'+T_default+'_'), bbox_inches='tight')
     plt.show()
     plt.close()
 
     #end of: for extraplated values -> extrapolate values for missing configurations generally##################
 
-    dataOverview.to_csv('results/erosionFullCampaign/totalErosionWholeCampaignAllPositions.csv', sep=';')
-    dataOverview3.to_csv('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsExtrapolated.csv', sep=';')
+    dataOverview.to_csv('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositions.csv'.format(campaign=campaign, Ts='_'+T_default+'_'), sep=';')
+    dataOverview3.to_csv('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositionsExtrapolated.csv'.format(campaign=campaign, Ts='_'+T_default+'_'), sep=';')
+
+##################################################################################################################################################################
+def calculateAverageQuantityPerConfiguration(quantity: str,
+                                             config: str, 
+                                             LP_position: list[int|float], 
+                                             campaign: str ='',
+                                             dischargeList: str ='results/configurations/dischargeList_') -> str|None:
+    if campaign == '':
+        campaign = 'OP223'
+    if not os.path.isfile(dischargeList + campaign + '_{config}.csv'.format(config=config)):
+        return 'file missing for ' + config
+    
+    dischargeOverview = pd.read_csv(dischargeList + campaign + '_{config}.csv'.format(config=config), sep=';')
+    averageConfiguration = np.array([0.]*36)
+    timeConfiguration = np.array([0.]*36)
+    for discharge, duration, overviewTable in zip(dischargeOverview['dischargeID'], dischargeOverview['duration'], dischargeOverview['overviewTable']):
+        discharge = str(discharge)
+ 
+        if os.path.isfile('results/calculationTablesNew/' + overviewTable.split('/')[-1]):
+            overviewTable = pd.read_csv('results/calculationTablesNew/' + overviewTable.split('/')[-1], sep = ';')
+        #elif os.path.isfile(overviewTable):
+        #    overviewTable = pd.read_csv(overviewTable, sep=';')
+        else:
+            continue
+        times = list(np.unique(overviewTable['time']))
+        LPlist, indices = list(np.unique(overviewTable['LangmuirProbe'], return_index=True))
+        LPs = np.array(overviewTable['LangmuirProbe'])[np.sort(indices)]
+        if 0 in times:
+            times.remove(0)
+        times.sort()
+        #times = [times] * len(LPs)
+        #times = np.hstack(np.array(times)) #flattens times to get an one dimensional array
+    
+        if len(times) != 0:
+            if max(times) > duration:
+                lastTimeIndex = [j > duration for j in times].index(True) - 1            
+            else:
+                lastTimeIndex = len(times) - 1
+
+            if len(times[:lastTimeIndex + 1]) > 1:
+                timesteps = [times[0] + (times[1] - times[0])/2]#timesteps = [dt[0]]
+                for j in range(1, len(times[:lastTimeIndex + 1]) - 1):#range(1, len(dt)):
+                    timesteps.append((times[j] - times[j - 1])/2 + (times[j + 1] - times[j])/2)#timesteps.append(dt[j] - dt[j - 1])
+                if lastTimeIndex != len(times) - 1:
+                    if times[lastTimeIndex] + (times[lastTimeIndex + 1] - times[lastTimeIndex])/2 > duration:
+                        timesteps.append((times[lastTimeIndex] - times[lastTimeIndex - 1])/2 + duration - times[lastTimeIndex])
+                    else:
+                        timesteps.append((times[lastTimeIndex] - times[lastTimeIndex - 1])/2 + (times[lastTimeIndex + 1] - times[lastTimeIndex])/2)
+                        timesteps.append(duration - times[lastTimeIndex] - (times[lastTimeIndex + 1] - times[lastTimeIndex])/2)
+                else:
+                    timesteps.append((times[lastTimeIndex] - times[lastTimeIndex - 1])/2 + duration - times[lastTimeIndex])
+            elif len(times[:lastTimeIndex + 1]) == 0:
+                lastTimeIndex == 0
+                timesteps = [duration]
+            else:
+                if times[0] + (times[1] - times[0])/2 > duration:
+                    timesteps = [duration]
+                else:
+                    timesteps = [times[0] + (times[1] - times[0])/2, duration - (times[0] + (times[1] - times[0])/2)]
+        else:
+            timesteps = []
+
+        timesteps = np.array(timesteps)
+
+        LPs = list(LPs)
+        averageListDischarge = []
+        timeDischarge = []
+        for DUindex in ['lower', 'upper']:
+            for LPindex in range(18):
+                if DUindex + str(LPindex) in LPs:
+                    counter = LPs.index(DUindex + str(LPindex))
+                    averageDischarge = 0
+                    duration_measurement = 0
+                    for counter2, dt in enumerate(timesteps):
+                        indexCounter = counter * len(timesteps) + counter2
+                        if list(overviewTable[quantity])[indexCounter] != 0 and not np.isnan(list(overviewTable[quantity])[indexCounter]):
+                            if quantity == 'Te':
+                                if list(overviewTable[quantity])[indexCounter] != 320:
+                                    averageDischarge += list(overviewTable[quantity])[indexCounter] * dt
+                                    duration_measurement += dt
+                                else:
+                                    continue
+                            else:
+                                averageDischarge += list(overviewTable[quantity])[indexCounter] * dt
+                                duration_measurement += dt
+                        else:
+                            continue
+                    if duration_measurement != 0:
+                        averageListDischarge.append(averageDischarge/duration_measurement)
+                        timeDischarge.append(duration_measurement)
+                    else:
+                        averageListDischarge.append(0)
+                        timeDischarge.append(0)
+                else:
+                    averageListDischarge.append(0)
+                    timeDischarge.append(0)
+        averageConfiguration = np.hstack(np.nansum(np.dstack((np.array(averageConfiguration), (np.array(averageListDischarge) * np.array(timeDischarge)))), 2))
+        timeConfiguration = np.hstack(np.nansum(np.dstack((np.array(timeConfiguration), np.array(timeDischarge))), 2))
+    averageConfiguration = averageConfiguration/timeConfiguration
+
+    if not os.path.exists('results/averageQuantities/{quantity}/{config}'.format(quantity=quantity, config=config)):
+        os.makedirs('results/averageQuantities/{quantity}/{config}'.format(quantity=quantity, config=config)) 
+
+    plt.plot(LP_position[14:], averageConfiguration[14:18], 'b', label='lower divertor unit')
+    plt.plot(LP_position[14:], averageConfiguration[32:], 'm', label='upper divertor unit')
+    plt.legend()
+    plt.xlabel('distance from pumping gap (m)')
+    plt.ylabel('average ' + quantity)
+    plt.savefig('results/averageQuantities/{quantity}/{config}/{quantity}{campaign}{config}AverageAllPositionsHighIota.png'.format(quantity=quantity, campaign=campaign, config=config), bbox_inches='tight')
+    plt.show()
+    plt.close()
+
+    plt.plot(LP_position[:14], averageConfiguration[:14], 'b', label='lower divertor unit')
+    plt.plot(LP_position[:14], averageConfiguration[18:32], 'm', label='upper divertor unit')
+    plt.legend()
+    plt.xlabel('distance from pumping gap (m)')
+    plt.ylabel('average ' + quantity)
+    plt.savefig('results/averageQuantities/{quantity}/{config}/{quantity}{campaign}{config}AverageAllPositionsLowIota.png'.format(quantity=quantity, campaign=campaign, config=config), bbox_inches='tight')
+    plt.show()
+    plt.close()
+
+    return averageConfiguration, timeConfiguration
