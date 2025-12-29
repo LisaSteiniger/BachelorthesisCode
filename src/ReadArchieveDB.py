@@ -18,29 +18,51 @@ def getRuntimePerConfiguration(configurations: list[str] =['EIM000-2520', 'EIM00
                                                            'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520'],
                                campaign: str ='',
                                dischargeIDcsv: str ='results/configurations/dischargeList_', 
+                               configurationErosionMeasured: str ='results/erosionMeasuredConfig/totalErosionAtPosition_',
+                               configurationOverview: str = 'inputFiles/Overview4.csv',
                                safe: str ='results/configurations/configurationRuntimes') -> None:
     ''' This function determines the absolute and relative runtime of each configuration over all discharges given by .csv files saved under "dischargeIDcsv" + "*", the results are written to .csv file saved under "safe"
         Each configuration has its own file, so function iterates over those files and sums up the number of discharges and their durations
         The DataFrame from each file contains all discharges of this configuration and has the keys 'dischargeID', 'duration', 'configuration', and 'overviewTables' (default safe for calculation tables of a discharge)
-        "campaign" determines the OP being investigated (either 'OP22', 'OP23', or '' for both of them)'''
+        "campaign" determines the OP being investigated (either 'OP22', 'OP23', or '' for both of them)
+        "configurationErosionMeasured" is the general path pattern to a file containing the total erosion at a position for each discharge with available data
+        -> if there is no data for one LP, then no measurement data was available for it in this configuration
+        "configurationOverview" is an overview file containing information about all released configurations (e.g. I_A and I_B and which group (low, standard or high iota) they belong to)'''
 
     runtimes = pd.DataFrame({})
-    absoluteRuntimes, relativeRuntimes, absoluteNumberOfDischarges, relativeNumberOfDischarges = [], [], [], []
+    absoluteRuntimes, relativeRuntimes, absoluteNumberOfDischarges, relativeNumberOfDischarges, iota, frad, HHeRatio = [], [], [], [], [], [], []
     totalRuntime = 0
     totalNumber = 0
 
+    configInfo = pd.read_csv(configurationOverview, sep=';')
     if campaign == '':
         campaign = 'OP223'
     for configuration in configurations:
         if not os.path.isfile(dischargeIDcsv + campaign + '_' + configuration + '.csv'): #if there is no file, no discharge were found
             absoluteRuntimes.append(0)
             absoluteNumberOfDischarges.append(0)
+            frad.append(0)
+            HHeRatio.append(0)
         else:
             dischargeList = pd.read_csv(dischargeIDcsv + campaign + '_' + configuration + '.csv', sep=';')
             absoluteRuntimes.append(np.nansum(dischargeList['duration']))
             absoluteNumberOfDischarges.append(len(dischargeList['dischargeID']))
+
+            if absoluteNumberOfDischarges[-1] == 0:
+                frad.append(0)
+                HHeRatio.append(0)
+
+            else:            
+                frad_missing = np.array([not np.isnan(x) for x in np.array(dischargeList['frad'])])
+                frad.append(np.nansum(np.array(dischargeList['frad']) * np.array(dischargeList['duration']))/np.nansum(np.array(dischargeList['duration'])[frad_missing]))
+                
+                HHeRatio_missing = np.array([not np.isnan(x) for x in np.array(dischargeList['HHeRatio'])])
+                HHeRatio.append(np.nansum(np.array(dischargeList['HHeRatio']) * np.array(dischargeList['duration']))/np.nansum(np.array(dischargeList['duration'])[HHeRatio_missing]))
+        
         totalRuntime += absoluteRuntimes[-1]
         totalNumber += absoluteNumberOfDischarges[-1]
+
+        iota.append(list(configInfo['iota'])[list(configInfo['configuration']).index(configuration)])
 
     for runtime, number in zip(absoluteRuntimes, absoluteNumberOfDischarges):
         relativeRuntimes.append(runtime/totalRuntime * 100)
@@ -52,13 +74,47 @@ def getRuntimePerConfiguration(configurations: list[str] =['EIM000-2520', 'EIM00
     relativeRuntimes.append(100)
     absoluteNumberOfDischarges.append(totalNumber)
     relativeNumberOfDischarges.append(100)
+    iota.append('')
+    
+    frad_missing = np.array([not np.isnan(x) for x in np.array(frad)])
+    frad.append(np.nansum(np.array(frad) * np.array(absoluteRuntimes[:-1]))/np.nansum(np.array(absoluteRuntimes[:-1])[frad_missing]))
+
+    HHeRatio_missing = np.array([not np.isnan(x) for x in np.array(HHeRatio)])
+    HHeRatio.append(np.nansum(np.array(HHeRatio) * np.array(absoluteRuntimes[:-1]))/np.nansum(np.array(absoluteRuntimes[:-1])[HHeRatio_missing]))
 
     runtimes['configuration'] = configurations
     runtimes['absolute number of discharges'] = absoluteNumberOfDischarges
     runtimes['relative number of discharges (%)'] = relativeNumberOfDischarges
     runtimes['absolute runtime (s)'] = absoluteRuntimes
     runtimes['relative runtime (%)'] = relativeRuntimes
-    runtimes = runtimes.sort_values('absolute runtime (s)')
+    runtimes['iota'] = iota
+    runtimes['frad'] = frad
+    runtimes['HHeRatio'] = HHeRatio
+
+    for DU in ['lower', 'upper']:
+        for index in range(18):
+            data_access = []
+            for i, configuration in enumerate(configurations[:-1]):
+                if absoluteNumberOfDischarges[i] == 0:
+                    data_access.append('no')
+                else:
+                    for c in configurations[:-1]:
+                        config = configuration[:3] + configuration[6]
+                        if c[:3] + c[6] == config:
+                            if os.path.isfile(configurationErosionMeasured + c + '.csv'):
+                                if np.nansum(np.array(pd.read_csv(configurationErosionMeasured + c + '.csv', sep=';')[DU + str(index) + '_erosion'])) != 0:
+                                    data_access.append('yes')
+                                    break
+                        if c == configurations[-2]:
+                            data_access.append('no')
+            if 'yes' in data_access:
+                data_access.append('yes')
+            else:
+                data_access.append('no')
+
+            runtimes['data {DU}{index}'.format(DU=DU, index=str(index))] = data_access
+
+    runtimes = runtimes.sort_values(by=['absolute runtime (s)', 'absolute number of discharges'])
 
     runtimes.to_csv(safe + campaign + '.csv', sep=';')
     configurations.remove('all')
@@ -265,6 +321,43 @@ def readLangmuirProbeDataFromXdrive(dischargeID: str) -> str|list[list]:
         return 'wrong units'
 
 #######################################################################################################################################################################        
+def compareLangmuirProbesWithHeBeam(LPxyz: list[list[int|float]], 
+                                    shot: str = '20250507.007',
+                                    safe: str = 'results/HeBeam/ComparePositionHeBeamAndLP_',
+                                    overviewTable: str ='results/calculationTablesNew/results_'):
+    LP_r, LP_z = [], []
+    for LP in LPxyz:
+        LP_r.append(np.sqrt(LP[0]**2 + LP[1]**2))
+        LP_z.append(LP[2])
+    
+    HeBeam = np.load('inputFiles\HeBeam\he_beam_data_{shot}_AEH51.npz'.format(shot=shot))
+    LPdata = pd.read_csv(overviewTable + shot + '.csv')
+    print(HeBeam.files)
+
+    fig, ax = plt.subplots(3, 1, layout='tight', figsize=(10, 8))
+    ax[0].plot(HeBeam['rvec'], HeBeam['zvec'], 'x', label='HeBeam')
+    ax[0].plot(LP_r, LP_z, 'x', label='LP')
+    for i in [0]:#range(len(HeBeam['t'])):
+        ax[1].plot(HeBeam['rvec'], HeBeam['ne'][i], 'x', label='ne HeBeam')
+        ax[1].plot(HeBeam['rvec'], HeBeam['Te'][i], 'o', label='Te HeBeam')
+    #ax[2].plot(LP_r[LPdata['ne'][])
+    for i in range(3):
+        ax[i].set_xlabel('Radial component r in m')
+        ax[i].legend()
+    ax[0].set_ylabel('Vertical component z in m')
+    ax[1].set_ylabel('Electron Temperature Te in eV\n Electron density ne in m$^-3$')
+    ax[2].set_ylabel('Electron Temperature Te in eV\n Electron density ne in m$^-3$')
+    fig.savefig(safe + shot + '.png', bbox_inches='tight')
+    plt.show()
+    plt.close()
+
+
+    #print(HeBeam['ne'])
+    #print(HeBeam['Te'])
+    #print(HeBeam['rvec'])
+    print(HeBeam['zvec'])
+    #print(HeBeam['meta'])
+#######################################################################################################################################################################        
 def readAllShotNumbersFromLogbook(config: str, 
                                   filterSelected: str, 
                                   q_add: str,
@@ -313,7 +406,7 @@ def readAllShotNumbersFromLogbook(config: str,
         q_add = 'OP223'
         p = {'time':'[2024 TO 2025]', 'size':'9999', 'q' : q }   # OP2.2 and OP2.3
 
-    dischargeIDs, duration_Trigger, duration_planned, duration_ECRH_NBI, overviewTables = [], [], [], [], []    
+    dischargeIDs, duration_Trigger, duration_planned, duration_ECRH_NBI, frad, HHeRatio, overviewTables = [], [], [], [], [], [], []
 
     res = requests.get(url, params=p).json()#, verify=certifi.where()).json()
 
@@ -333,56 +426,124 @@ def readAllShotNumbersFromLogbook(config: str,
         else:
             dischargeID = dischargeID[0][3:] + '.00' + dischargeID[1]
 
+        '''
         #try to read heating duration of ECRH and NBI (not accurate!)
         heating_data = w7xarchive.get_signal_for_program({'ECRH': "Test/raw/W7X/CBG_ECRH/TotalPower_DATASTREAM/V1/0/Ptot_ECRH",
                                                           'NBIS3': "ArchiveDB/codac/W7X/ControlStation.2176/BE000_DATASTREAM/4/s3_Pel/scaled", 
                                                           'NBIS4': "ArchiveDB/codac/W7X/ControlStation.2176/BE000_DATASTREAM/5/s4_Pel/scaled", 
                                                           'NBIS7': "ArchiveDB/codac/W7X/ControlStation.2092/BE000_DATASTREAM/4/s7_Pel/scaled", 
                                                           'NBIS8': "ArchiveDB/codac/W7X/ControlStation.2092/BE000_DATASTREAM/5/s8_Pel/scaled", 
-                                                          'ne': "ArchiveDB/raw/W7X/ControlStation.2185/Density_DATASTREAM/0/Density"},
+                                                          'ne': "ArchiveDB/raw/W7X/ControlStation.2185/Density_DATASTREAM/0/Density",
+                                                          'Prad': "ArchiveDB/raw/W7X/ControlStation.2224/QRB_Divertor_Bolometry_Prad_DATASTREAM/15/Prad QRB weigted sum",
+                                                          'HHeRatio': "ArchiveDB/raw/W7XAnalysis/QSK06_PassiveSpectroscopy/FastSpec_USB_HR4000_HHeRatio_DATASTREAM/V1/0/HHeRatio"},
                                                           dischargeID)
-        #merge heating DataFrames on rounded time axis
-        for i, key in enumerate(heating_data.keys()):
-            if i == 0:
-                merged_heating = pd.DataFrame({'time': np.round(np.array(heating_data[key][0]), 3), key: heating_data[key][1]})
-            else:
-                merged_heating = pd.merge(merged_heating, pd.DataFrame({'time': np.round(np.array(heating_data[key][0]), 3), key: heating_data[key][1]}), 'outer', on='time')
-        
-        #merged is only created if any data stream is existant
-        if len(heating_data.keys()) > 1:
-            heating = np.zeros_like(np.array(merged_heating['time']))
-            for key in merged_heating.keys():
-                if 'ECRH' in key:
-                    heating = heating + np.nan_to_num(np.array(merged_heating[key]))/1000
-                elif 'NBI' in key:
-                    heating = heating + np.nan_to_num(np.array(merged_heating[key]))
-            merged_heating['heating'] = heating
+        '''
+        #read trigger times of t1 and t4 if they both exist (otherwise append np.nan to duration_Trigger)
+        urlTrigger = urlTriggerBase + dischargeID + '#'
+        resTrigger = requests.get(urlTrigger).json()
 
-            filter_heating_discharge = [x > 1 for x in merged_heating['heating']]
-            if 'ne' in heating_data.keys():
-                filter_ne_discharge = [x > 1e19 for x in merged_heating['ne']]
-                if sum(filter_heating_discharge) == 0 or sum(filter_ne_discharge) == 0:
-                    continue
+        t1, t4 = np.nan, np.nan
+        trigger = np.nan
+        if 'programs' in resTrigger.keys():
+            if type(resTrigger['programs']) == list:
+                if 'trigger' in resTrigger['programs'][0].keys():
+                    if type(resTrigger['programs'][0]['trigger']) == dict:
+                        if '1' in resTrigger['programs'][0]['trigger'].keys() and '4' in resTrigger['programs'][0]['trigger'].keys():
+                            if type(resTrigger['programs'][0]['trigger']['4']) == list and type(resTrigger['programs'][0]['trigger']['1']) == list:
+                                if len(resTrigger['programs'][0]['trigger']['4']) > 0 and len(resTrigger['programs'][0]['trigger']['1']) > 0:
+                                    trigger = ((resTrigger['programs'][0]['trigger']['4'][0] - resTrigger['programs'][0]['trigger']['1'][0])/1e9)
+                                    t4 = resTrigger['programs'][0]['trigger']['4'][0]
+                                    t1 = resTrigger['programs'][0]['trigger']['1'][0]
+                                else:
+                                    print('Trigger "1" or "4" is an empty list')
+                            else:
+                                print('Trigger "1" or "4" is not a list')
+                        else:
+                            print('Trigger "1" or "4" does not exist')
+                    else:
+                        print('Trigger is not a dictionary')
+                else:
+                    print('No trigger in "programs"')
             else:
-                print('Is that a real discharge? '+ str(dischargeID))
-                continue
+                print('"programs" is no list')
+        else:
+            print('Key "programs" does not exist')
+
+        if not np.isnan(t1) and not np.isnan(t4):
+            heating_data = w7xarchive.get_signal({'ECRH': "Test/raw/W7X/CBG_ECRH/TotalPower_DATASTREAM/V1/0/Ptot_ECRH",
+                                                'NBIS3': "ArchiveDB/codac/W7X/ControlStation.2176/BE000_DATASTREAM/4/s3_Pel/scaled", 
+                                                'NBIS4': "ArchiveDB/codac/W7X/ControlStation.2176/BE000_DATASTREAM/5/s4_Pel/scaled", 
+                                                'NBIS7': "ArchiveDB/codac/W7X/ControlStation.2092/BE000_DATASTREAM/4/s7_Pel/scaled", 
+                                                'NBIS8': "ArchiveDB/codac/W7X/ControlStation.2092/BE000_DATASTREAM/5/s8_Pel/scaled", 
+                                                'ne': "ArchiveDB/raw/W7X/ControlStation.2185/Density_DATASTREAM/0/Density",
+                                                'Prad': "ArchiveDB/raw/W7X/ControlStation.2224/QRB_Divertor_Bolometry_Prad_DATASTREAM/15/Prad QRB weigted sum",
+                                                'HHeRatio': "ArchiveDB/raw/W7XAnalysis/QSK06_PassiveSpectroscopy/FastSpec_USB_HR4000_HHeRatio_DATASTREAM/V1/0/HHeRatio"},
+                                                t1, t4)
+            #merge heating DataFrames on rounded time axis
+            for i, key in enumerate(heating_data.keys()):
+                if i == 0:
+                    merged_heating = pd.DataFrame({'time': np.round(np.array(heating_data[key][0]), 3), key: heating_data[key][1]})
+                else:
+                    merged_heating = pd.merge(merged_heating, pd.DataFrame({'time': np.round(np.array(heating_data[key][0]), 3), key: heating_data[key][1]}), 'outer', on='time')
             
-            filter_heating = [x > 0.1 for x in merged_heating['heating']]
-            if sum(filter_heating) > 0:
-                duration_ECRH_NBI.append(merged_heating['time'][len(filter_heating) - 1 - filter_heating[::-1].index(True)] - merged_heating['time'][filter_heating.index(True)])
-            else:
-                if True:
+            #merged is only created if any data stream is existant
+            if len(heating_data.keys()) > 1:
+                heating = np.zeros_like(np.array(merged_heating['time']))
+                for key in merged_heating.keys():
+                    if 'ECRH' in key:
+                        heating = heating + np.nan_to_num(np.array(merged_heating[key]))/1000
+                    elif 'NBI' in key:
+                        heating = heating + np.nan_to_num(np.array(merged_heating[key]))
+                merged_heating['heating'] = heating
+
+                filter_heating_discharge = [x > 1 for x in merged_heating['heating']]
+                if 'ne' in heating_data.keys():
+                    filter_ne_discharge = [x > 1e19 for x in merged_heating['ne']]
+                    if sum(filter_heating_discharge) == 0 or sum(filter_ne_discharge) == 0:
+                        continue
+                else:
+                    print('Is that a real discharge? '+ str(dischargeID))
+                    continue
+                
+                filter_heating = [x > 0.1 for x in merged_heating['heating']]
+                if sum(filter_heating) > 0:
+                    duration_ECRH_NBI.append((merged_heating['time'][len(filter_heating) - 1 - filter_heating[::-1].index(True)] - merged_heating['time'][filter_heating.index(True)])/1e9)
+                else:
                     duration_ECRH_NBI.append(np.nan)
 
-        #if no data stream existed append np.nan
+                if 'Prad' in merged_heating.keys():
+                    heating_0 = np.array([j != 0 for j in heating])
+                    if sum(heating_0) == 0:
+                        frad.append(np.nan)
+                    else:
+                        x = np.nansum(np.array(merged_heating['Prad'])[heating_0]/heating[heating_0])/len(heating[heating_0])
+                        frad.append(x)
+                else:
+                    frad.append(np.nan)
+
+                if 'HHeRatio' in merged_heating.keys():
+                    x = np.nansum(np.array(merged_heating['HHeRatio']))/len(heating)
+                    if x == 0:
+                        HHeRatio.append(np.nan)
+                    else:
+                        HHeRatio.append(x)
+                else:
+                    HHeRatio.append(np.nan)
+
+            #if no data stream existed append np.nan
+            else:
+                print('Is that a real discharge? '+ str(dischargeID))
+                continue#duration_ECRH_NBI.append(np.nan)
         else:
-            print('Is that a real discharge? '+ str(dischargeID))
-            continue#duration_ECRH_NBI.append(np.nan)
-        
+            HHeRatio.append(np.nan)    
+            frad.append(np.nan)    
+            duration_ECRH_NBI.append(np.nan)
+
+        duration_Trigger.append(trigger)
         dischargeIDs.append(dischargeID) 
         overviewTables.append(overviewTableLink + dischargeID + '.csv')
         print(dischargeID)
-
+        '''
         #read trigger times of t1 and t4 if they both exist (otherwise append np.nan to duration_Trigger)
         urlTrigger = urlTriggerBase + dischargeID + '#'
         resTrigger = requests.get(urlTrigger).json()
@@ -416,7 +577,7 @@ def readAllShotNumbersFromLogbook(config: str,
             print('Key "programs" does not exist')
             duration_Trigger.append(np.nan)
 
-
+        '''
         #try to get planned ECRH heating durtion (planned != real (program abort) and no inclusion of NBI heating nor ICRH heating)
         for tag in discharge['_source']['tags']: 
             if 'catalog_id' in tag.keys():
@@ -433,7 +594,8 @@ def readAllShotNumbersFromLogbook(config: str,
     
     configuration = [config] * len(dischargeIDs)
 
-    dischargeTable = pd.DataFrame({'configuration': configuration, 'dischargeID': dischargeIDs, 'duration': duration_Trigger, 'duration_planned': duration_planned, 'durationHeating': duration_ECRH_NBI, 'overviewTable': overviewTables})
+    dischargeTable = pd.DataFrame({'configuration': configuration, 'dischargeID': dischargeIDs, 'duration': duration_Trigger, 'duration_planned': duration_planned, 'durationHeating': duration_ECRH_NBI, 
+                                   'frad': frad, 'HHeRatio': HHeRatio, 'overviewTable': overviewTables})
     dischargeTable.to_csv(safe + '_' + q_add + '_' + config + '.csv', sep=';')
     
     return dischargeTable

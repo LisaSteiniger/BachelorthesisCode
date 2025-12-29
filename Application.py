@@ -19,7 +19,7 @@ import src.SputteringYieldFunctions as calc
 import src.ProcessData as process
 import src.ReadArchieveDB as read
 #import src.CXRS
-from src.PositionsLangmuirProbes import OP2_TM2Distances, OP2_TM3Distances, OP2_TM8Distances, OP2_TM2zeta, OP2_TM3zeta, OP2_TM8zeta
+from src.PositionsLangmuirProbes import OP2_TM2Distances, OP2_TM3Distances, OP2_TM8Distances, OP2_TM2zeta, OP2_TM3zeta, OP2_TM8zeta, OP2_TM2xyz, OP2_TM3xyz, OP2_TM8xyz
 
 #avoids pop up of plot windows
 matplotlib.use('agg')
@@ -70,6 +70,8 @@ for configuration in configurations:
 #reference discharges for impurity concentration analysis of carbon and oxygen by CXRS and DRGA
 impurityReferenceShots = ['20250304.075', '20250408.055', '20250408.079']
 
+HeBeamReferenceShots = ['20250507.007', '20250507.009', '20250508.071', '20250320.077']
+
 #alternative:
 #manual set up of all configurations to be looked at
 #configurations = ['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
@@ -88,7 +90,7 @@ filterSelected = q1 + q2 + q3
 #are the discharge lists per configuration already saved (at least partially, missing files will be created anyways)? 
 #-> results/configurations/dischargeList*.csv
 #set this to False only if you want to reset your whole data set (e.g. when having changed the filter for the discharges)
-filesExist = True                   
+filesExist = False                   
 
 #should the measurement values be read out again?
 #set True only if there was a problem with the reading routine
@@ -120,10 +122,14 @@ run = False
 
 #TEST RESULTS IF TEMPERATURE IS NOT SET TO 320K BY DEFAULT BUT TO NAN -> JUST LIKE ne AND Te IN SEVERALDISCHARGES
 
-#HeBeam = np.load('inputFiles\HeBeam\he_beam_data_20250507.007_AEH51.npz')
-#print(HeBeam['ne'])
-#print(HeBeam['Te'])
 '''
+LPxyz = [OP2_TM2xyz]
+LPxyz.append(OP2_TM3xyz)
+LPxyz = list(itertools.chain.from_iterable(LPxyz))
+
+for shot in HeBeamReferenceShots:
+    read.compareLangmuirProbesWithHeBeam(LPxyz, shot) #incomplete for LPs and different timesteps
+
 LP_position = [OP2_TM2Distances]
 LP_position.append(OP2_TM3Distances)
 LP_position.append(OP2_TM8Distances)
@@ -229,6 +235,7 @@ for quantity in ['ne', 'Te', 'Ts']:
 
         print(averageCampaign)
 '''
+read.getRuntimePerConfiguration(configurations, 'OP22')
 if not run:
     exit()
 
