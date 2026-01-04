@@ -90,7 +90,7 @@ filterSelected = q1 + q2 + q3
 #are the discharge lists per configuration already saved (at least partially, missing files will be created anyways)? 
 #-> results/configurations/dischargeList*.csv
 #set this to False only if you want to reset your whole data set (e.g. when having changed the filter for the discharges)
-filesExist = False                   
+filesExist = True                   
 
 #should the measurement values be read out again?
 #set True only if there was a problem with the reading routine
@@ -100,7 +100,7 @@ reReadData = False
 #are missing values of ne, Te, Ts already intrapolated for the given combination of n_target, f_i, alpha (at least partially, missing files will be created anyways)? 
 #-> results/calculationTablesNew/results*.csv
 #set this to False when you changed n_target, f_i, or alpha
-intrapolated = False
+intrapolated = True
 
 #should ne, Te, Ts, Y, Delta_ero, Delta_dep,... be plotted for original and extrapolated data?
 #-> results/plots/*png
@@ -108,7 +108,7 @@ plottingOriginalData = False
 plottingExtrapolatedData = False
 
 #should the main program run or is just some other testing going on? -> only commands above "if not run:" will be executed
-run = False
+run = True
 
 #######################################################################################################################################################################
 #HERE IS THE RUNNING PROGRAM (SHOULD RUN WITHOUT INTERNAL CHANGES WHEN FINALLY FINISHED)
@@ -235,7 +235,7 @@ for quantity in ['ne', 'Te', 'Ts']:
 
         print(averageCampaign)
 '''
-read.getRuntimePerConfiguration(configurations, 'OP22')
+#read.getRuntimePerConfiguration(configurations, 'OP22')
 if not run:
     exit()
 
@@ -255,7 +255,7 @@ if __name__ == '__main__':
     LP_zeta = list(itertools.chain.from_iterable(LP_zeta))
     #same indices as LP_position
     
-    for campaign in ['OP23', 'OP22', '']:      
+    for campaign in ['']:#'OP23', 'OP22', '']:      
         configurations_OP = []  
         for configuration in configurations:     
             #find all discharge IDs according to the filters activated in "filterSelected" 
@@ -366,10 +366,11 @@ if __name__ == '__main__':
             print(process.calculateTotalErodedLayerThicknessWholeCampaignPerConfig(configuration, campaign))
         
         #sums up all layer thicknesses of all configurations
-        process.calculateTotalErodedLayerThicknessWholeCampaign(configurations_OP, LP_position, campaign, T_default)    
+        #process.calculateTotalErodedLayerThicknessWholeCampaign(configurations_OP, 'all', LP_position, campaign, T_default)    
+        process.calculateTotalErodedLayerThicknessWholeCampaign(configurations_OP, 'EIM', LP_position, campaign, T_default)    
 
         #configuration percentages of total runtime in OP2.2/2.3
-        read.getRuntimePerConfiguration(configurations, campaign)
+        #read.getRuntimePerConfiguration(configurations, campaign)
 
     '''
     #plot manually extrapolated erosion over whole campaign

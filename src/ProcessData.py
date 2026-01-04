@@ -875,14 +875,16 @@ def calculateTotalErodedLayerThicknessWholeCampaignPerConfig(config: str,
 
 #######################################################################################################################################################################        
 def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str], 
+                                                    configurationChosen: str,
                                                     LP_position: list[int|float], 
                                                     campaign: str ='',
                                                     T_default: str ='',
                                                     totalErosionFiles: str ='results/erosionExtrapolatedConfig/totalErosionAtPositionWholeCampaign_',
                                                     configurationOverview: str ='inputFiles/Overview4.csv') -> None:
-    ''' This function calculates total erosion/deposition layer thickness for all LPs that occurred during the whole campaign in all configurations listed in "configurationList"
-        -> if for a configuration no data exists at a LP position, that can not be taken into account)
+    ''' This function calculates total erosion/deposition layer thickness for all LPs that occurred during the whole campaign in all/some configurations listed in "configurationList"
+        -> if for a configuration no data exists at a LP position, that can not be taken into account
         -> one value for erosion/deposition layer thickness of each LP by adding up the values of each configuration 
+        -> "configurationChosen" = 'all' means, that all configurations are considered, 'EIM' means only standard configuration is considered, ...
         The distance of each langmuir probe from the pumping gap is given in "LP_position" in [m], probe indices 0 - 5 are on TM2h07, 6 - 13 on TM3h01, and 14 - 17 on TM8h01
         "campaign" is introducing which campaigns are investigated 
         -> '' means all available campaigns, otherwise type 'OP22' or 'OP23'
@@ -898,6 +900,9 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
     #for not extraplated values -> missing configurations are missing##############
     erosion_position = np.array([0.] * 36)
     deposition_position = np.array([0.] * 36)
+    duration_ero = np.array([0.] * 36)
+    duration_depo = np.array([0.] * 36)
+
     dataOverview = pd.DataFrame({'LP': ['lower0', 'lower1', 'lower2', 'lower3', 'lower4', 'lower5', 'lower6', 'lower7', 'lower8', 'lower9', 'lower10', 'lower11', 'lower12', 'lower13', 'lower14', 'lower15', 'lower16', 'lower17', 
                              'upper0', 'upper1', 'upper2', 'upper3', 'upper4', 'upper5', 'upper6', 'upper7', 'upper8', 'upper9', 'upper10', 'upper11', 'upper12', 'upper13', 'upper14', 'upper15', 'upper16', 'upper17']})
     
@@ -906,47 +911,65 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
             print('file missing for ' + config)
             config_missing.append(config)
             continue
-        
+
+        if configurationChosen != 'all' and not config.startswith(configurationChosen):
+            print(config + ' is not matching configuration ' + configurationChosen)
+            config_missing.append(config)
+            continue
+
         else:
             erosion = pd.read_csv(totalErosionFiles + '{config}.csv'.format(config=config), sep=';')
             if list(erosion['LP']) == list(dataOverview['LP']):
                 print('everything is all right')
             else:
                 print('we have got a problem') #in that case handling of the below has to be changed
+            
             erosion_position = np.hstack(np.nansum(np.dstack((np.array(erosion['erosion_total (m)']), erosion_position)), 2))
             deposition_position = np.hstack(np.nansum(np.dstack((np.array(erosion['deposition_total (m)']), deposition_position)), 2))
+
+            ero, depo = [], []
+            for LP in range(len(erosion_position)):
+                if erosion['erosion_total (m)'][LP] != 0:
+                    ero.append(np.array(erosion['duration_total (s)'])[LP])
+                else:
+                    ero.append(0)
+                if erosion['deposition_total (m)'][LP] != 0:
+                    depo.append(np.array(erosion['duration_total (s)'])[LP])
+                else:
+                    depo.append(0)
+
+            duration_ero = np.hstack(np.nansum(np.dstack((np.array(ero), duration_ero)), 2))
+            duration_depo = np.hstack(np.nansum(np.dstack((np.array(depo), duration_depo)), 2))
+
             dataOverview[config + '_erosion'] = np.array(erosion['erosion_total (m)'])#np.array([np.isnan(i) for i in erosion['erosion_total (m)']])
             dataOverview[config + '_deposition'] = np.array(erosion['deposition_total (m)'])#np.array([np.isnan(i) for i in erosion['erosion_total (m)']])
             dataOverview[config + '_netErosion'] = np.array(erosion['netErosion_total (m)'])#np.array([np.isnan(i) for i in erosion['erosion_total (m)']])
             dataOverview[config + '_duration'] = np.array(erosion['duration_total (s)'])
 
+    for j, x in enumerate(duration_ero):
+        if np.isnan(x) or x == 0:
+            duration_ero[j] = np.inf
+
+    for j, x in enumerate(duration_depo):
+        if np.isnan(x) or x == 0:
+            duration_depo[j] = np.inf
+
+    erosion_rate = erosion_position/duration_ero    
+    deposition_rate = deposition_position/duration_depo    
+    print(erosion_rate)    
+    print(deposition_rate)   
+
     #plot low iota, not extrapolated
-    plt.plot(LP_position[:14], (0 - erosion_position[:14])*1e-3, 'b--', label='erosion lower divertor unit')
-    plt.plot(LP_position[:14], (deposition_position[:14])*1e-3, 'b:', label='deposition lower divertor unit')
-    plt.plot(LP_position[:14], (0 - erosion_position[:14] + deposition_position[:14])*1e-3,'b-', label='net erosion lower divertor unit')
-    plt.plot(LP_position[:14], (0 - erosion_position[18:32])*1e-3, 'm--', label='erosion upper divertor unit')
-    plt.plot(LP_position[:14], (deposition_position[18:32])*1e-3, 'm:', label='deposition upper divertor unit')
-    plt.plot(LP_position[:14], (0 - erosion_position[18:32] + deposition_position[18:32])*1e-3, 'm-', label='net erosion upper divertor unit')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel('total layer thickness (mm)')
-    plt.savefig('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositionsLowIota.png'.format(campaign=campaign, Ts='_'+T_default+'_'), bbox_inches='tight')
-    plt.show()
-    plt.close()
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'low', 'lower', configurationChosen, campaign, T_default)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'low', 'lower', configurationChosen, campaign, T_default, False, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'low', 'upper', configurationChosen, campaign, T_default)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'low', 'upper', configurationChosen, campaign, T_default, False, True)
 
     #plot high iota, not extrapolated
-    plt.plot(LP_position[14:], (0 - erosion_position[14:18])*1e-3, 'b--', label='erosion lower divertor unit')
-    plt.plot(LP_position[14:], (deposition_position[14:18])*1e-3, 'b:', label='deposition lower divertor unit')
-    plt.plot(LP_position[14:], (0 - erosion_position[14:18] + deposition_position[14:18])*1e-3, 'b-', label='net erosion lower divertor unit')
-    plt.plot(LP_position[14:], (0 - erosion_position[32:])*1e-3, 'm--', label='erosion upper divertor unit')
-    plt.plot(LP_position[14:], (deposition_position[32:])*1e-3, 'm:', label='deposition upper divertor unit')
-    plt.plot(LP_position[14:], (0 - erosion_position[32:] + deposition_position[32:])*1e-3, 'm-', label='net erosion upper divertor unit')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel('total layer thickness (mm)')
-    plt.savefig('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositionsHighIota.png'.format(campaign=campaign, Ts='_'+T_default+'_'), bbox_inches='tight')
-    plt.show()
-    plt.close()
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'high', 'lower', configurationChosen, campaign, T_default)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'high', 'lower', configurationChosen, campaign, T_default, False, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'high', 'upper', configurationChosen, campaign, T_default)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'high', 'upper', configurationChosen, campaign, T_default, False, True)
 
     #end of: for not extraplated values -> missing configurations are missing##############
     
@@ -955,6 +978,7 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
     config_short = []
     config_iota = []
     iota_problem = []
+    
     for config in configurationList:
         if config not in config_missing:
             if config[:3] + config[6] not in config_short:
@@ -966,15 +990,12 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
                 if config_iota[i] != configOverview['iota'][list(configOverview['configuration']).index(config)]:
                     iota_problem.append(config_short[i])
     print(iota_problem)
+    
     dataOverview2 = pd.DataFrame({'LP': dataOverview['LP']})
 
     for config_3 in config_short:
         duration_total_config = 0
-        duration_erosion_known_config = []
-        duration_deposition_known_config = []
-        erosion_known_config = []
         erosion_total_config = []
-        deposition_known_config = []
         deposition_total_config = []
         config_column = []
 
@@ -989,7 +1010,7 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
                     continue
                 if config in config_missing:
                     continue
-                
+
                 if list(dataOverview[config + '_erosion'])[LP] != 0 and not np.isnan(list(dataOverview[config + '_erosion'])[LP]):
                     erosion += list(dataOverview[config + '_erosion'])[LP]
                     duration_erosion += list(dataOverview[config + '_duration'])[LP]
@@ -1001,10 +1022,6 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
                     duration_total_config += list(dataOverview[config + '_duration'])[0]
                     config_column.append(config)
 
-            erosion_known_config.append(erosion)
-            deposition_known_config.append(deposition)
-            duration_erosion_known_config.append(duration_erosion)     
-            duration_deposition_known_config.append(duration_deposition)  
             if duration_erosion != 0:
                 erosion_total_config.append(erosion * duration_total_config/duration_erosion)   
             else: 
@@ -1041,12 +1058,10 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
 
     #for extraplated values -> extrapolate values for missing configurations generally##################
     erosion_total, deposition_total = np.array([0.] * 36), np.array([0.] * 36)
+    duration_total = 0
+    
     for iota in ['low', 'standard', 'high']:
-        duration_total = 0
-        erosion_total_known = []
-        deposition_total_known = []
-        duration_erosion_known = []
-        duration_deposition_known = []
+        duration_total_iota = 0
         erosion_total_iota = []
         deposition_total_iota = []
 
@@ -1068,18 +1083,14 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
                     deposition += list(dataOverview2[config + '_deposition'])[LP]
                     duration_deposition += list(dataOverview2[config + '_duration'])[LP]
                 if LP == 0:
-                    duration_total += list(dataOverview2[config + '_duration'])[0]
+                    duration_total_iota += list(dataOverview2[config + '_duration'])[0]
 
-            erosion_total_known.append(erosion)
-            deposition_total_known.append(deposition)
-            duration_erosion_known.append(duration_erosion)     
-            duration_deposition_known.append(duration_deposition)  
             if duration_erosion != 0:
-                erosion_total_iota.append(erosion * duration_total/duration_erosion)   
+                erosion_total_iota.append(erosion * duration_total_iota/duration_erosion)   
             else: 
                 erosion_total_iota.append(0)
             if duration_deposition != 0:
-                deposition_total_iota.append(deposition * duration_total/duration_deposition)   
+                deposition_total_iota.append(deposition * duration_total_iota/duration_deposition)   
             else:
                 deposition_total_iota.append(0)
 
@@ -1087,64 +1098,62 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
         dataOverview3 = pd.DataFrame({'LP': dataOverview['LP']})
         for config in configurationList:
             if config in config_missing:
-                    continue
+                continue
+            if configOverview['iota'][list(configOverview['configuration']).index(config)] != iota:
+                continue
             erosion, deposition, netErosion = [], [], []
 
             for LP in range(len(dataOverview2['LP'])):
-                if list(dataOverview2[config + '_erosion'])[LP] == 0 or np.isnan(list(dataOverview2[config + '_erosion'])[LP]):
-                    erosion.append(erosion_total_iota[LP] * list(dataOverview2[config + '_duration'])[LP]/duration_total)
-                else:
-                    erosion.append(dataOverview2[config + '_erosion'][LP])
+                if duration_total_iota != 0:
+                    if list(dataOverview2[config + '_erosion'])[LP] == 0 or np.isnan(list(dataOverview2[config + '_erosion'])[LP]):
+                        erosion.append(erosion_total_iota[LP] * list(dataOverview2[config + '_duration'])[LP]/duration_total_iota)
+                    else:
+                        erosion.append(dataOverview2[config + '_erosion'][LP])
 
-                if list(dataOverview2[config + '_deposition'])[LP] == 0 or np.isnan(list(dataOverview2[config + '_deposition'])[LP]):
-                    deposition.append(deposition_total_iota[LP] * list(dataOverview2[config + '_duration'])[LP]/duration_total)
+                    if list(dataOverview2[config + '_deposition'])[LP] == 0 or np.isnan(list(dataOverview2[config + '_deposition'])[LP]):
+                        deposition.append(deposition_total_iota[LP] * list(dataOverview2[config + '_duration'])[LP]/duration_total_iota)
+                    else:
+                        deposition.append(list(dataOverview2[config + '_deposition'])[LP])
                 else:
-                    deposition.append(list(dataOverview2[config + '_deposition'])[LP])
-
+                    erosion.append(0)
+                    deposition.append(0)
                 netErosion.append(erosion[-1] - deposition[-1])
 
             dataOverview3[config + '_erosion'] = erosion
             dataOverview3[config + '_deposition'] = deposition
             dataOverview3[config + '_netErosion'] = netErosion
             dataOverview3[config + '_duration'] = dataOverview2[config + '_duration']
+        duration_total += duration_total_iota
         erosion_total = np.hstack(np.nansum(np.dstack((np.array(erosion_total_iota), erosion_total)), 2))
         deposition_total = np.hstack(np.nansum(np.dstack((np.array(deposition_total_iota), deposition_total)), 2))
 
-    #erosion_total = np.array(erosion_total)
-    #deposition_total = np.array(deposition_total)
+    if duration_total != 0:
+        erosion_rate_total = erosion_total/duration_total
+        deposition_rate_total = deposition_total/duration_total
+    else:
+        erosion_rate_total = np.zeros_like(erosion_rate_total)
+        deposition_rate_total = np.zeros_like(erosion_rate_total)
 
+    print(erosion_rate_total)
+    print(deposition_rate_total)
+    print(duration_total)
     #plot low iota, extrapolated
-    plt.plot(LP_position[:14], (0 - erosion_total[:14])*1e-3, 'b--', label='erosion lower divertor unit')
-    plt.plot(LP_position[:14], (deposition_total[:14])*1e-3, 'b:', label='deposition lower divertor unit')
-    plt.plot(LP_position[:14], (0 - erosion_total[:14] + deposition_total[:14])*1e-3,'b-', label='net erosion lower divertor unit')
-    plt.plot(LP_position[:14], (0 - erosion_total[18:32])*1e-3, 'm--', label='erosion upper divertor unit')
-    plt.plot(LP_position[:14], (deposition_total[18:32])*1e-3, 'm:', label='deposition upper divertor unit')
-    plt.plot(LP_position[:14], (0 - erosion_total[18:32] + deposition_total[18:32])*1e-3, 'm-', label='net erosion upper divertor unit')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel('total layer thickness (mm)')
-    plt.savefig('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositionsLowIotaExtrapolated.png'.format(campaign=campaign, Ts='_'+T_default+'_'), bbox_inches='tight')
-    plt.show()
-    plt.close()
-
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'low', 'lower', configurationChosen, campaign, T_default, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'low', 'lower', configurationChosen, campaign, T_default, True, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'low', 'upper', configurationChosen, campaign, T_default, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'low', 'upper', configurationChosen, campaign, T_default, True, True)
+    
     #plot high iota, extrapolated
-    plt.plot(LP_position[14:], (0 - erosion_total[14:18])*1e-3, 'b--', label='erosion lower divertor unit')
-    plt.plot(LP_position[14:], (deposition_total[14:18])*1e-3, 'b:', label='deposition lower divertor unit')
-    plt.plot(LP_position[14:], (0 - erosion_total[14:18] + deposition_total[14:18])*1e-3, 'b-', label='net erosion lower divertor unit')
-    plt.plot(LP_position[14:], (0 - erosion_total[32:])*1e-3, 'm--', label='erosion upper divertor unit')
-    plt.plot(LP_position[14:], (deposition_total[32:])*1e-3, 'm:', label='deposition upper divertor unit')
-    plt.plot(LP_position[14:], (0 - erosion_total[32:] + deposition_total[32:])*1e-3, 'm-', label='net erosion upper divertor unit')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel('total layer thickness (mm)')
-    plt.savefig('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositionsHighIotaExtrapolated.png'.format(campaign=campaign, Ts='_'+T_default+'_'), bbox_inches='tight')
-    plt.show()
-    plt.close()
-
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'high', 'lower', configurationChosen, campaign, T_default, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'high', 'lower', configurationChosen, campaign, T_default, True, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'high', 'upper', configurationChosen, campaign, T_default, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'high', 'upper', configurationChosen, campaign, T_default, True, True)
+ 
     #end of: for extraplated values -> extrapolate values for missing configurations generally##################
-
-    dataOverview.to_csv('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositions.csv'.format(campaign=campaign, Ts='_'+T_default+'_'), sep=';')
-    dataOverview3.to_csv('results/erosionFullCampaign/{campaign}{Ts}totalErosionWholeCampaignAllPositionsExtrapolated.csv'.format(campaign=campaign, Ts='_'+T_default+'_'), sep=';')
+    if configurationChosen == 'all':
+        configurationChosen = 'WholeCampaign'
+    dataOverview.to_csv('results/erosionFullCampaign/{campaign}_{Ts}_totalErosion{configuration}AllPositions.csv'.format(campaign=campaign, Ts=T_default, configuration=configurationChosen), sep=';')
+    dataOverview3.to_csv('results/erosionFullCampaign/{campaign}_{Ts}_totalErosion{configuration}AllPositionsExtrapolated.csv'.format(campaign=campaign, Ts=T_default, configuration=configurationChosen), sep=';')
 
 ##################################################################################################################################################################
 def calculateAverageQuantityPerConfiguration(quantity: str,
