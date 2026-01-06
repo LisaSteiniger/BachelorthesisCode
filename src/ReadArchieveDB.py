@@ -9,10 +9,28 @@ import w7xarchive   #see https://git.ipp-hgw.mpg.de/kjbrunne/w7xarchive/-/blob/m
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import src.ProcessData as process
 from src.dlp_data import extract_divertor_probe_data as extract
 from src.heatflux_T import heatflux_T_download
 
 #####################################################################################################################################################################
+def determineIotaForAllConfigurations(overviewPath: str ='inputFiles/Overview4.csv'):
+    ''' This function determines the iota (low, standard, or high) for each configuration given in "overview"
+        -> coil currents 'IA [A]' and 'IB [A]' must be provided as columns of the .csv file "overview"
+        -> new column 'iota' is added to the file'''
+    
+    overview = pd.read_csv(overviewPath, sep=';')
+    iota = []
+    for IA, IB in zip(overview['IA [A]'], overview['IB [A]']):
+        if IA < -2000 and IB < -2000:
+            iota.append('high')
+        elif IA > 2000 and IB > 2000:
+            iota.append('low')
+        else:
+            iota.append('standard')
+    overview['iota'] = iota
+    overview.to_csv(overviewPath, sep=';')
+
 def getRuntimePerConfiguration(configurations: list[str] =['EIM000-2520', 'EIM000-2620', 'KJM008-2520', 'KJM008-2620', 'FTM000-2620', 'FTM004-2520', 'DBM000-2520', 'FMM002-2520',
                                                            'EIM000+2520', 'EIM000+2620', 'EIM000+2614', 'DBM000+2520', 'KJM008+2520', 'KJM008+2620', 'XIM001+2485', 'MMG000+2520', 
                                                            'DKJ000+2520', 'IKJ000+2520', 'FMM002+2520', 'KTM000+2520', 'FTM004+2520', 'FTM004+2585', 'FTM000+2620', 'AIM000+2520', 'KOF000+2520'],
@@ -325,38 +343,61 @@ def compareLangmuirProbesWithHeBeam(LPxyz: list[list[int|float]],
                                     shot: str = '20250507.007',
                                     safe: str = 'results/HeBeam/ComparePositionHeBeamAndLP_',
                                     overviewTable: str ='results/calculationTablesNew/results_'):
-    LP_r, LP_z = [], []
+    ''' This function plots measurement positions, ne and Te values for one discharge "shot" of HeBeam and Langmuir Probes against each other
+        -> for upper dievrtor unit in low iota section of M5
+        ->"LPxyz" is an array holding subarrays [x, y, z] coordinate of each LP in that DU and iota section
+        "safe" is the path where to save the figure
+        "overviewTable" is the path where to find the LP data (.csv file with columns 'time', 'LangmuirProbe', 'ne', 'Te')'''
+
+    LP_r, LP_z = [], [] #will hold radial (r) and vertical (z) coordinates of the Langmuir Probes on upper divertor unit low iota region
     for LP in LPxyz:
         LP_r.append(np.sqrt(LP[0]**2 + LP[1]**2))
         LP_z.append(LP[2])
     
     HeBeam = np.load('inputFiles\HeBeam\he_beam_data_{shot}_AEH51.npz'.format(shot=shot))
-    LPdata = pd.read_csv(overviewTable + shot + '.csv')
-    print(HeBeam.files)
+    LPdata = pd.read_csv(overviewTable + shot + '.csv', sep=';')
+    #print(HeBeam.files)
 
+    #find measurement times of LPs and corresponding measurement times (minimal deviation from LP_times) of HeBeam 
+    LP_times = list(np.unique(LPdata['time']))
+    HeBeam_times = []
+    for time in LP_times:
+        HeBeam_times.append(np.argmin(np.array(list(map(lambda x: abs(x - time), HeBeam['t'][0])))))
+    
+    #get indices for LP_r as they do not match the indices in LPdata
+    LP_indices = process.findIndexLP(LPdata)
+    LP_r_index, LP_firstIndex = [], []
+    for LP in LP_indices:
+        if LP[0].startswith('upper') and int(LP[0][5:]) < 14:
+            LP_r_index.append(int(LP[0][5:]))
+            LP_firstIndex.append(int(LP[1])) #first index with 'LangmuirProbe'==e.g. 'upper0' in LPdata 
+    
+    colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:grey', 'tab:olive', 'tab:cyan']
     fig, ax = plt.subplots(3, 1, layout='tight', figsize=(10, 8))
+    
+    #plot location of measurement positions for HeBeam and LPs
     ax[0].plot(HeBeam['rvec'], HeBeam['zvec'], 'x', label='HeBeam')
-    ax[0].plot(LP_r, LP_z, 'x', label='LP')
-    for i in [0]:#range(len(HeBeam['t'])):
-        ax[1].plot(HeBeam['rvec'], HeBeam['ne'][i], 'x', label='ne HeBeam')
-        ax[1].plot(HeBeam['rvec'], HeBeam['Te'][i], 'o', label='Te HeBeam')
-    #ax[2].plot(LP_r[LPdata['ne'][])
+    ax[0].plot(LP_r, LP_z, 'o', label='LP')
+
+    for i, color in zip(HeBeam_times, colors[:len(HeBeam_times)]):
+        ax[1].plot(HeBeam['rvec'], HeBeam['ne'][i], 'x', color=color, label='ne t={t:.2f} s'.format(t=HeBeam['t'][0][i]))
+        ax[2].plot(HeBeam['rvec'], HeBeam['Te'][i], 'x', color=color, label='Te t={t:.2f} s'.format(t=HeBeam['t'][0][i]))
+        
+    for i, color in zip(range(int(LP_indices[0][2]) - int(LP_indices[0][1]) + 1), colors[:len(HeBeam_times)]):
+        ax[1].plot(np.array(LP_r)[LP_r_index], np.array(LPdata['ne'])[np.array(LP_firstIndex) + i]*1e-18, 'o', color=color)#, label='ne LP t={t} s'.format(t=np.array(LPdata['time'])[LP_firstIndex[0] + i]))
+        ax[2].plot(np.array(LP_r)[LP_r_index], np.array(LPdata['Te'])[np.array(LP_firstIndex) + i], 'o', color=color)#, label='Te LP t={t} s'.format(t=np.array(LPdata['time'])[LP_firstIndex[0] + i]))
+    
     for i in range(3):
         ax[i].set_xlabel('Radial component r in m')
         ax[i].legend()
+    
     ax[0].set_ylabel('Vertical component z in m')
-    ax[1].set_ylabel('Electron Temperature Te in eV\n Electron density ne in m$^-3$')
-    ax[2].set_ylabel('Electron Temperature Te in eV\n Electron density ne in m$^-3$')
+    ax[1].set_ylabel('Electron density $n_e$ in 1e+18 m$^-3$')
+    ax[2].set_ylabel('Electron Temperature $T_e$ in eV')
     fig.savefig(safe + shot + '.png', bbox_inches='tight')
     plt.show()
     plt.close()
 
-
-    #print(HeBeam['ne'])
-    #print(HeBeam['Te'])
-    #print(HeBeam['rvec'])
-    print(HeBeam['zvec'])
-    #print(HeBeam['meta'])
 #######################################################################################################################################################################        
 def readAllShotNumbersFromLogbook(config: str, 
                                   filterSelected: str, 

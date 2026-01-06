@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import src.SputteringYieldFunctions as calc
-import src.ReadArchieveDB as read
+#import src.ReadArchieveDB as read
 import src.PlotData as plot
 
 #######################################################################################################################################################################
@@ -1161,8 +1161,12 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
                                              LP_position: list[int|float], 
                                              campaign: str ='',
                                              dischargeList: str ='results/configurations/dischargeList_') -> str|None:
+    ''' This function calculates the average value for one of the quantities ne, Te, or Ts (="quantity") for one configuration "config"
+        -> at all Langmuir Probe positions given in "LP_position"
+        -> for all discharges in "config" and in "campaign" given in "dischargeList"'''
     if campaign == '':
         campaign = 'OP223'
+
     if not os.path.isfile(dischargeList + campaign + '_{config}.csv'.format(config=config)):
         return 'file missing for ' + config
     
@@ -1276,3 +1280,92 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
     plt.close()
 
     return averageConfiguration, timeConfiguration
+
+def frameCalculateAverageQuantityPerConfiguration(quantities: list[str], 
+                                                  campaigns: list[str], 
+                                                  configurations: list[str], 
+                                                  LP_position: list[int|float],
+                                                  config_short: bool|str =False) -> None: 
+    ''' This function is the frame work for calculateAverageQuantityPerConfiguration
+        It determines the average value of each quantity given in "quantities" (ne, Te, Ts) at each Langmuir Probe position given by "LP_position"
+        -> for each configuration given in "configurations" (if file with discharges exists) and matching "config_short"
+        -> "config_short can be False, then the average of all configurations is determined, or e.g. 'EIM', then only EIM... configurations are considered for the total average
+        -> distinguishes between "campaigns" 'OP22', 'OP23', and '' meaning both campaigns'''       
+    for quantity in quantities:
+        for campaign in campaigns:
+            averageCampaign = np.array([0.] * 36)
+            timeCampaign = np.array([0.] * 36)
+            
+            for config in configurations:
+                
+                if type(config_short) != bool:
+                    if not config.startswith(config_short):
+                        print(config + 'not matching configuration group ' + config_short)
+                        continue
+
+                resultAverage = calculateAverageQuantityPerConfiguration(quantity, config, LP_position, campaign)
+                if type(resultAverage) == str:
+                    print(resultAverage)
+                else:  
+                    timeCampaign = np.hstack(np.nansum(np.dstack((np.array(timeCampaign), np.array(resultAverage[1]))), 2))
+                    averageCampaign = np.hstack(np.nansum(np.dstack((np.array(averageCampaign), ((np.array(resultAverage[1])*np.array(resultAverage[0]))) )), 2))
+        
+            averageCampaign = averageCampaign/timeCampaign
+
+            plt.plot(LP_position[14:], averageCampaign[14:18], 'b', label='lower divertor unit')
+            plt.plot(LP_position[14:], averageCampaign[32:], 'm', label='upper divertor unit')
+            plt.legend()
+            plt.xlabel('distance from pumping gap (m)')
+            plt.ylabel('average ' + quantity)
+            plt.savefig('results/averageQuantities/{quantity}/{quantity}{campaign}AverageAllPositionsHighIota.png'.format(quantity=quantity, campaign=campaign), bbox_inches='tight')
+            plt.show()
+            plt.close()
+
+            plt.plot(LP_position[:14], averageCampaign[:14], 'b', label='lower divertor unit')
+            plt.plot(LP_position[:14], averageCampaign[18:32], 'm', label='upper divertor unit')
+            plt.legend()
+            plt.xlabel('distance from pumping gap (m)')
+            plt.ylabel('average ' + quantity)
+            plt.savefig('results/averageQuantities/{quantity}/{quantity}{campaign}AverageAllPositionsLowIota.png'.format(quantity=quantity, campaign=campaign), bbox_inches='tight')
+            plt.show()
+            plt.close()
+
+            print(averageCampaign)
+
+############################################################################################################################
+def approximationOfLayerThicknessesBasedOnAverageParameterValues(LP_position: list[int|float], campaign: str,
+                                                                 alpha: int|float, zeta: list[int|float], m_i: list[int|float], f_i: list[int|float], ions: list[str], k: int|float, n_target: int|float) -> None: 
+    if campaign == 'OP2.2': 
+        ne = [8.10861120e+18, 9.23699360e+18, 5.39394510e+18, 4.88005878e+18, 6.41963593e+19, 7.53689257e+18, 3.74975667e+18, 2.87621473e+18, 1.86239725e+18, 1.77501141e+18, 1.24395721e+18, 8.16433709e+17, 7.98950114e+17, 2.63917556e+18, 6.71595628e+18, 6.02079381e+18, 6.96774702e+18, 8.67705959e+18, 7.34334178e+18, 6.82833426e+18, 3.96166626e+18, 3.27682856e+18, 3.05768770e+18, 2.92846510e+18, 2.13915956e+18, 1.78086238e+18, 5.61754825e+19, 2.76740351e+18, 3.49056208e+18, 1.00981278e+18, 9.08946107e+17, 1.89625133e+19, 4.69150909e+18, 5.29825547e+18, 8.07835520e+18, 7.49023570e+18]
+        Te = [23.10917898, 23.97398849, 17.24971306, 12.9683621, 16.1148856, 15.14815498, 11.83223752, 11.13380081, 10.22305666, 8.8592773, 7.93170485, 6.82595981, 6.60610872, 4.80160941, 17.62515757, 16.13908412, 25.78049094, 20.23960462, 22.49694823, 23.95433543, 20.73571079, 16.05200695, 16.11300381, 15.77758246, 10.83166445, 9.89855224, 10.14166381, 7.22341548, 8.01914169, 6.33356499, 11.30071018, 4.04176992, 9.98670479, 11.42823382, 17.45413223, 25.34487122]
+        Ts = [348.53123333, 339.57542575, 327.58684535, 322.48441638, 320.37366489, 320.53570604, 316.64689784, 314.81928323, 313.70052689, 312.70113155, 312.37350838, 312.15832773, 311.93336754, 312.42157821, 333.43560488, 371.92962704, 433.55672356, 435.60782705, 357.57614827, 351.53122556, 336.32154333, 326.37350381, 323.99850832, 321.41492792, 316.27895614, 315.81451817, 314.67173041, 313.93423271, 312.82564765, 312.18334915, 312.06617817, 313.87187357, 379.7223462, 333.73038846, 357.42425781, 398.05262984]
+        t = 20372.65
+
+    elif campaign == 'OP2.3':
+        ne = [7.23425072e+18, 6.49082692e+18, 4.74422826e+18, 4.13011762e+18, 1.00974487e+19, 4.06601437e+18, 4.58674313e+18, 3.35729073e+18, 1.63927672e+18, 2.32379908e+18, 1.83177974e+18, 1.51632845e+18, 5.19738099e+17, 9.77853187e+17, np.nan , np.nan , 3.99357880e+18, np.nan , 8.19180641e+18, 8.43372562e+18, 2.26185620e+18, 2.21738383e+18, 1.88094868e+18, 1.87003597e+18, 4.06435840e+18, 3.09974771e+18, 4.07980777e+18, 1.88866226e+18, 1.50819279e+18, 1.52277035e+18, 9.89528048e+17, 2.13408464e+18, 4.46755927e+18, 5.46513067e+18, 6.51305893e+18, 7.82164729e+18]
+        Te = [22.01761885, 22.46042915, 16.40248943, 14.18213774, 17.20604823, 16.68423172, 12.41207622, 12.30609299, 14.7635153, 10.55438673, 10.20832988, 10.06609525, 26.80995318, 17.61596149, np.nan , np.nan , 29.90268815, np.nan , 22.29111767, 23.60803396, 21.16374238, 15.52334095, 15.09640528, 15.98598422, 13.43930376, 13.32485776, 13.91981687, 13.66644289, 10.7030418, 11.5603852, 30.29936855, 18.54352217, 9.81694099, 13.86485593, 18.71589961, 19.61945445]
+        Ts = [344.02238096, 331.31824545, 321.68943264, 318.01602097, 317.16175369, 318.8853121, 315.30428473, 313.76628092, 312.89937246, 311.64312308, 311.17382574, 310.84767811, 311.19797395, 311.8039927, np.nan , np.nan , 377.54746229, np.nan , 340.8332816, 341.27643279, 333.74961652, 322.96430675, 319.93706882, 318.74008531, 315.99218539, 315.65745321, 314.32493327, 312.87997257, 312.18616397, 311.9843921, 312.43478398, 314.37532688, 350.47602205, 354.20017493, 370.1831045, 386.89669786]
+        t = 28333.24
+    
+    elif campaign == '':
+        ne = [7.67669550e+18, 7.87359786e+18, 5.06883517e+18, 4.50678007e+18, 4.18099586e+19, 5.84696312e+18, 4.16512236e+18, 3.11504844e+18, 1.75203223e+18, 2.04518742e+18, 1.53398982e+18, 1.16495639e+18, 6.57016472e+17, 1.64853914e+18, 6.71595628e+18, 6.02079381e+18, 4.21687487e+18, 8.67705959e+18, 7.73744930e+18, 7.59404418e+18, 3.13558215e+18, 2.76987019e+18, 2.49778347e+18, 2.42486796e+18, 3.05919152e+18, 2.40057371e+18, 3.24314296e+19, 2.35439188e+18, 2.55752020e+18, 1.23901201e+18, 9.53427533e+17, 1.03968918e+19, 4.47277606e+18, 5.45519706e+18, 6.60716485e+18, 7.79225959e+18]
+        Te = [22.57062858, 23.22354637, 16.82666691, 13.5712462, 16.62277776, 15.90181622, 12.11971609, 11.71505922, 12.4771496, 9.70027448, 9.0603626, 8.43274704, 16.30989349, 10.37925827, 17.62515757, 16.13908412, 29.64032044, 20.23960462, 22.39974752, 23.79127039, 20.93864322, 15.80200345, 15.63251635, 15.87614281, 12.0691916, 11.52400789, 11.92908508, 10.25756316, 9.29313957, 8.79815706, 20.29700216, 10.68119372, 9.8210141, 13.722815, 18.64225509, 19.97987108]
+        Ts = [346.28735421, 335.44220232, 324.63478839, 320.24767996, 318.77968648, 319.71480009, 315.97417336, 314.29167, 313.29910358, 312.17095723, 311.7723403, 311.50155343, 311.57167871, 312.1262853, 333.43560488, 371.92962704, 381.08950793, 435.60782705, 349.56278168, 346.6231405, 335.09058373, 324.74181514, 322.05464744, 320.13471141, 316.14129944, 315.7391233, 314.50492494, 313.4271456, 312.5185426, 312.08774737, 312.24329866, 314.11283431, 352.32557001, 352.90565834, 369.37623049, 387.60220297]
+        t = 48705.89
+        campaign = 'OP223'
+
+    zeta = list(itertools.chain.from_iterable([zeta, zeta]))
+
+    erosion, deposition = [], []
+    for i in range(len(ne)):
+        Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness1, depositionRate_dt, depositedLayerThickness_dt, depositedLayerThickness = calculateErosionRelatedQuantitiesOnePosition(np.array([Te[i]]), np.array([Te[i]]), np.array([Ts[i]]), np.array([ne[i]]), np.array([t]), alpha, zeta[i], m_i, f_i, ions, k, n_target)
+        erosion.append(erodedLayerThickness1)
+        deposition.append(depositedLayerThickness)
+
+    erosion = np.array(list(itertools.chain.from_iterable(erosion)))
+    deposition = np.array(list(itertools.chain.from_iterable(deposition)))
+
+    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'low', 'lower', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_LowIota_LowerDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
+    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'low', 'upper', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_LowIota_UpperDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
+    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'high', 'lower', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_HighIota_LowerDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
+    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'high', 'upper', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_HighIota_UpperDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))

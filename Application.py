@@ -18,6 +18,7 @@ from src.settings import e, k_B, k, u, E_TF, E_s, Q_y_chem, C_d_chem, E_thd_chem
 import src.SputteringYieldFunctions as calc
 import src.ProcessData as process
 import src.ReadArchieveDB as read
+import src.PlotData as plot
 #import src.CXRS
 from src.PositionsLangmuirProbes import OP2_TM2Distances, OP2_TM3Distances, OP2_TM8Distances, OP2_TM2zeta, OP2_TM3zeta, OP2_TM8zeta, OP2_TM2xyz, OP2_TM3xyz, OP2_TM8xyz
 
@@ -64,8 +65,9 @@ else:
 
 #list of all released configurations (date: 01. Dec. 2025) from W7X-info
 configurations = pd.read_csv('inputFiles/Overview2.csv')['configuration']
-for configuration in configurations:
-    pass#print(configuration)
+
+#if iota information is missing, activate ('inputFiles/Overview4.csv' with columns 'IA [A]' and 'IB [A]' must exist):
+#read.determineIotaForAllConfigurations()
 
 #reference discharges for impurity concentration analysis of carbon and oxygen by CXRS and DRGA
 impurityReferenceShots = ['20250304.075', '20250408.055', '20250408.079']
@@ -112,130 +114,6 @@ run = True
 
 #######################################################################################################################################################################
 #HERE IS THE RUNNING PROGRAM (SHOULD RUN WITHOUT INTERNAL CHANGES WHEN FINALLY FINISHED)
-#reality check
-#ne, Te, Ts, Ts2, timesteps = np.array([1.02 * 1e+18]), np.array([13.26]), np.array([30 + 273.15]), np.array([850 + 273.15]), np.array([50000])
-#Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness1, depositionRate_dt, depositedLayerThickness_dt, depositedLayerThickness = process.calculateErosionRelatedQuantitiesOnePosition(Te, Te, Ts, ne, timesteps, alpha, m_i, f_i, ions, k, n_target)
-#print(Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness, depositionRate_dt, depositedLayerThickness_dt, depositedLayerThickness)
-#Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness2, depositionRate_dt, depositedLayerThickness_dt, depositedLayerThickness = process.calculateErosionRelatedQuantitiesOnePosition(Te, Te, Ts2, ne, timesteps, alpha, m_i, f_i, ions, k, n_target)
-#print(Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness, depositionRate_dt, depositedLayerThickness_dt, depositedLayerThickness)
-#print(erodedLayerThickness1[0] - erodedLayerThickness2[0])
-
-#TEST RESULTS IF TEMPERATURE IS NOT SET TO 320K BY DEFAULT BUT TO NAN -> JUST LIKE ne AND Te IN SEVERALDISCHARGES
-
-'''
-LPxyz = [OP2_TM2xyz]
-LPxyz.append(OP2_TM3xyz)
-LPxyz = list(itertools.chain.from_iterable(LPxyz))
-
-for shot in HeBeamReferenceShots:
-    read.compareLangmuirProbesWithHeBeam(LPxyz, shot) #incomplete for LPs and different timesteps
-
-LP_position = [OP2_TM2Distances]
-LP_position.append(OP2_TM3Distances)
-LP_position.append(OP2_TM8Distances)
-LP_position = list(itertools.chain.from_iterable(LP_position))
-
-neOP22=[8.10861120e+18, 9.23699360e+18, 5.39394510e+18, 4.88005878e+18, 6.41963593e+19, 7.53689257e+18, 3.74975667e+18, 2.87621473e+18, 1.86239725e+18, 1.77501141e+18, 1.24395721e+18, 8.16433709e+17, 7.98950114e+17, 2.63917556e+18, 6.71595628e+18, 6.02079381e+18, 6.96774702e+18, 8.67705959e+18, 7.34334178e+18, 6.82833426e+18, 3.96166626e+18, 3.27682856e+18, 3.05768770e+18, 2.92846510e+18, 2.13915956e+18, 1.78086238e+18, 5.61754825e+19, 2.76740351e+18, 3.49056208e+18, 1.00981278e+18, 9.08946107e+17, 1.89625133e+19, 4.69150909e+18, 5.29825547e+18, 8.07835520e+18, 7.49023570e+18]
-neOP23=[7.23425072e+18, 6.49082692e+18, 4.74422826e+18, 4.13011762e+18, 1.00974487e+19, 4.06601437e+18, 4.58674313e+18, 3.35729073e+18, 1.63927672e+18, 2.32379908e+18, 1.83177974e+18, 1.51632845e+18, 5.19738099e+17, 9.77853187e+17, np.nan , np.nan , 3.99357880e+18, np.nan , 8.19180641e+18, 8.43372562e+18, 2.26185620e+18, 2.21738383e+18, 1.88094868e+18, 1.87003597e+18, 4.06435840e+18, 3.09974771e+18, 4.07980777e+18, 1.88866226e+18, 1.50819279e+18, 1.52277035e+18, 9.89528048e+17, 2.13408464e+18, 4.46755927e+18, 5.46513067e+18, 6.51305893e+18, 7.82164729e+18]
-ne=[7.67669550e+18, 7.87359786e+18, 5.06883517e+18, 4.50678007e+18, 4.18099586e+19, 5.84696312e+18, 4.16512236e+18, 3.11504844e+18, 1.75203223e+18, 2.04518742e+18, 1.53398982e+18, 1.16495639e+18, 6.57016472e+17, 1.64853914e+18, 6.71595628e+18, 6.02079381e+18, 4.21687487e+18, 8.67705959e+18, 7.73744930e+18, 7.59404418e+18, 3.13558215e+18, 2.76987019e+18, 2.49778347e+18, 2.42486796e+18, 3.05919152e+18, 2.40057371e+18, 3.24314296e+19, 2.35439188e+18, 2.55752020e+18, 1.23901201e+18, 9.53427533e+17, 1.03968918e+19, 4.47277606e+18, 5.45519706e+18, 6.60716485e+18, 7.79225959e+18]
-
-TeOP22=[23.10917898, 23.97398849, 17.24971306, 12.9683621, 16.1148856, 15.14815498, 11.83223752, 11.13380081, 10.22305666, 8.8592773, 7.93170485, 6.82595981, 6.60610872, 4.80160941, 17.62515757, 16.13908412, 25.78049094, 20.23960462, 22.49694823, 23.95433543, 20.73571079, 16.05200695, 16.11300381, 15.77758246, 10.83166445, 9.89855224, 10.14166381, 7.22341548, 8.01914169, 6.33356499, 11.30071018, 4.04176992, 9.98670479, 11.42823382, 17.45413223, 25.34487122]
-TeOP23=[22.01761885, 22.46042915, 16.40248943, 14.18213774, 17.20604823, 16.68423172, 12.41207622, 12.30609299, 14.7635153, 10.55438673, 10.20832988, 10.06609525, 26.80995318, 17.61596149, np.nan , np.nan , 29.90268815, np.nan , 22.29111767, 23.60803396, 21.16374238, 15.52334095, 15.09640528, 15.98598422, 13.43930376, 13.32485776, 13.91981687, 13.66644289, 10.7030418, 11.5603852, 30.29936855, 18.54352217, 9.81694099, 13.86485593, 18.71589961, 19.61945445]
-Te=[22.57062858, 23.22354637, 16.82666691, 13.5712462, 16.62277776, 15.90181622, 12.11971609, 11.71505922, 12.4771496, 9.70027448, 9.0603626, 8.43274704, 16.30989349, 10.37925827, 17.62515757, 16.13908412, 29.64032044, 20.23960462, 22.39974752, 23.79127039, 20.93864322, 15.80200345, 15.63251635, 15.87614281, 12.0691916, 11.52400789, 11.92908508, 10.25756316, 9.29313957, 8.79815706, 20.29700216, 10.68119372, 9.8210141, 13.722815, 18.64225509, 19.97987108]
-
-TsOP22=[348.53123333, 339.57542575, 327.58684535, 322.48441638, 320.37366489, 320.53570604, 316.64689784, 314.81928323, 313.70052689, 312.70113155, 312.37350838, 312.15832773, 311.93336754, 312.42157821, 333.43560488, 371.92962704, 433.55672356, 435.60782705, 357.57614827, 351.53122556, 336.32154333, 326.37350381, 323.99850832, 321.41492792, 316.27895614, 315.81451817, 314.67173041, 313.93423271, 312.82564765, 312.18334915, 312.06617817, 313.87187357, 379.7223462, 333.73038846, 357.42425781, 398.05262984]
-TsOP23=[344.02238096, 331.31824545, 321.68943264, 318.01602097, 317.16175369, 318.8853121, 315.30428473, 313.76628092, 312.89937246, 311.64312308, 311.17382574, 310.84767811, 311.19797395, 311.8039927, np.nan , np.nan , 377.54746229, np.nan , 340.8332816, 341.27643279, 333.74961652, 322.96430675, 319.93706882, 318.74008531, 315.99218539, 315.65745321, 314.32493327, 312.87997257, 312.18616397, 311.9843921, 312.43478398, 314.37532688, 350.47602205, 354.20017493, 370.1831045, 386.89669786]
-Ts=[346.28735421, 335.44220232, 324.63478839, 320.24767996, 318.77968648, 319.71480009, 315.97417336, 314.29167, 313.29910358, 312.17095723, 311.7723403, 311.50155343, 311.57167871, 312.1262853, 333.43560488, 371.92962704, 381.08950793, 435.60782705, 349.56278168, 346.6231405, 335.09058373, 324.74181514, 322.05464744, 320.13471141, 316.14129944, 315.7391233, 314.50492494, 313.4271456, 312.5185426, 312.08774737, 312.24329866, 314.11283431, 352.32557001, 352.90565834, 369.37623049, 387.60220297]
-
-tOP23=28333.24
-tOP22=20372.65
-t=48705.89
-
-for n_e, T_e, T_s, time, campaign in [[neOP22, TeOP22, TsOP22, tOP22, 'OP22'], [neOP23, TeOP23, TsOP23, tOP23, 'OP23'], [ne, Te, Ts, t, 'OP223']]:
-    erosion, deposition = [], []
-    for i in range(len(n_e)):
-        Y_0, Y_1, Y_2, Y_3, Y_4, erosionRate_dt, erodedLayerThickness_dt, erodedLayerThickness1, depositionRate_dt, depositedLayerThickness_dt, depositedLayerThickness = process.calculateErosionRelatedQuantitiesOnePosition(np.array([T_e[i]]), np.array([T_e[i]]), np.array([T_s[i]]), np.array([n_e[i]]), np.array([time]), alpha, m_i, f_i, ions, k, n_target)
-        erosion.append(erodedLayerThickness1)
-        deposition.append(depositedLayerThickness)
-    plt.plot(LP_position[14:], 0 - np.array(erosion[14:18]), 'b--', label='erosion lower divertor unit')
-    plt.plot(LP_position[14:], 0 - np.array(erosion[32:]), 'm--', label='erosion upper divertor unit')
-    plt.plot(LP_position[14:], deposition[14:18], 'b:', label='deposition lower divertor unit')
-    plt.plot(LP_position[14:], deposition[32:], 'm:', label='deposition upper divertor unit')
-    plt.plot(LP_position[14:], 0 - np.array(erosion[14:18]) + np.array(deposition[14:18]), 'b-', label='net erosion lower divertor unit')
-    plt.plot(LP_position[14:], 0 - np.array(erosion[32:]) + np.array(deposition[32:]), 'm-', label='net erosion upper divertor unit')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel('layer thickness in (m)')
-    plt.savefig('results/averageQuantities/{campaign}AverageAllPositionsHighIota.png'.format(campaign=campaign), bbox_inches='tight')
-    plt.show()
-    plt.close()
-
-    plt.plot(LP_position[:14], 0 - np.array(erosion[:14]), 'b--', label='erosion lower divertor unit')
-    plt.plot(LP_position[:14], 0 - np.array(erosion[18:32]), 'm--', label='erosion upper divertor unit')
-    plt.plot(LP_position[:14], deposition[:14], 'b:', label='deposition lower divertor unit')
-    plt.plot(LP_position[:14], deposition[18:32], 'm:', label='deposition upper divertor unit')
-    plt.plot(LP_position[:14], 0 - np.array(erosion[:14]) + np.array(deposition[:14]), 'b-', label='net erosion lower divertor unit')
-    plt.plot(LP_position[:14], 0 - np.array(erosion[18:32]) + np.array(deposition[18:32]), 'm-', label='net erosion upper divertor unit')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel('layer thickness in (m)')
-    plt.savefig('results/averageQuantities/{campaign}AverageAllPositionsLowIota.png'.format(campaign=campaign), bbox_inches='tight')
-    plt.show()
-    plt.close()
-
-'''    
-'''
-process.calculateTotalErodedLayerThicknessWholeCampaign(configurations, LP_position)
-
-overview = pd.read_csv('inputFiles/Overview4.csv', sep=';')
-iota = []
-for IA, IB in zip(overview['IA [A]'], overview['IB [A]']):
-    if IA < -2000 and IB < -2000:
-        iota.append('high')
-    elif IA > 2000 and IB > 2000:
-        iota.append('low')
-    else:
-        iota.append('standard')
-overview['iota'] = iota
-overview.to_csv('inputFiles/Overview4.csv', sep=';')
-
-for quantity in ['ne', 'Te', 'Ts']:
-    for campaign in ['OP23', 'OP22', '']:
-        averageCampaign = [0.] * 36
-        timeCampaign = [0.] * 36
-        averageCampaign = np.array(averageCampaign)
-        timeCampaign = np.array(timeCampaign)
-        for config in configurations:
-            resultAverage = process.calculateAverageQuantityPerConfiguration(quantity, config, LP_position, campaign)
-            if type(resultAverage) == str:
-                print(resultAverage)
-            else:  
-                timeCampaign = np.hstack(np.nansum(np.dstack((np.array(timeCampaign), np.array(resultAverage[1]))), 2))
-                averageCampaign = np.hstack(np.nansum(np.dstack((np.array(averageCampaign), ((np.array(resultAverage[1])*np.array(resultAverage[0]))) )), 2))
-    
-        averageCampaign = averageCampaign/timeCampaign
-
-        plt.plot(LP_position[14:], averageCampaign[14:18], 'b', label='lower divertor unit')
-        plt.plot(LP_position[14:], averageCampaign[32:], 'm', label='upper divertor unit')
-        plt.legend()
-        plt.xlabel('distance from pumping gap (m)')
-        plt.ylabel('average ' + quantity)
-        plt.savefig('results/averageQuantities/{quantity}/{quantity}{campaign}AverageAllPositionsHighIota.png'.format(quantity=quantity, campaign=campaign), bbox_inches='tight')
-        plt.show()
-        plt.close()
-
-        plt.plot(LP_position[:14], averageCampaign[:14], 'b', label='lower divertor unit')
-        plt.plot(LP_position[:14], averageCampaign[18:32], 'm', label='upper divertor unit')
-        plt.legend()
-        plt.xlabel('distance from pumping gap (m)')
-        plt.ylabel('average ' + quantity)
-        plt.savefig('results/averageQuantities/{quantity}/{quantity}{campaign}AverageAllPositionsLowIota.png'.format(quantity=quantity, campaign=campaign), bbox_inches='tight')
-        plt.show()
-        plt.close()
-
-        print(averageCampaign)
-'''
-#read.getRuntimePerConfiguration(configurations, 'OP22')
 if not run:
     exit()
 
@@ -366,56 +244,39 @@ if __name__ == '__main__':
             print(process.calculateTotalErodedLayerThicknessWholeCampaignPerConfig(configuration, campaign))
         
         #sums up all layer thicknesses of all configurations
-        #process.calculateTotalErodedLayerThicknessWholeCampaign(configurations_OP, 'all', LP_position, campaign, T_default)    
-        process.calculateTotalErodedLayerThicknessWholeCampaign(configurations_OP, 'EIM', LP_position, campaign, T_default)    
+        for configLayerThickness in ['all', 'EIM', 'FTM', 'DBM', 'KJM']:
+            process.calculateTotalErodedLayerThicknessWholeCampaign(configurations_OP, configLayerThickness, LP_position, campaign, T_default)    
 
         #configuration percentages of total runtime in OP2.2/2.3
-        #read.getRuntimePerConfiguration(configurations, campaign)
+        read.getRuntimePerConfiguration(configurations, campaign)
 
-    '''
-    #plot manually extrapolated erosion over whole campaign
-    #only applicable on the manual list of configuration at the moment
-    print(configurations)
-    erosion_position = np.array([0.] * 36)
-    deposition_position = np.array([0.] * 36)
-    config_missing = []
-    no_data = pd.DataFrame({'LP': ['lower0', 'lower1', 'lower2', 'lower3', 'lower4', 'lower5', 'lower6', 'lower7', 'lower8', 'lower9', 'lower10', 'lower11', 'lower12', 'lower13', 'lower14', 'lower15', 'lower16', 'lower17', 
-                             'upper0', 'upper1', 'upper2', 'upper3', 'upper4', 'upper5', 'upper6', 'upper7', 'upper8', 'upper9', 'upper10', 'upper11', 'upper12', 'upper13', 'upper14', 'upper15', 'upper16', 'upper17']})
-    if not os.path.isfile('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsManual.csv'):
-        print('file missing for manually extrapolated data')
-        exit()
-    else:
-        erosion = pd.read_csv('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsManual.csv', sep=';')
-    for counter, config in enumerate(configurations):
-        erosion_position = np.hstack(np.nansum(np.dstack((np.array(erosion[config + '_erosion'][:36]), erosion_position)), 2))
-        deposition_position = np.hstack(np.nansum(np.dstack((np.array(erosion[config + '_deposition'][:36]), deposition_position)), 2))
-    #print(erosion_position)
-    plt.plot(LP_position[:14], erosion_position[:14], 'b--', label='erosion lower divertor unit')
-    plt.plot(LP_position[:14], deposition_position[:14], 'b:', label='deposition lower divertor unit')
-    plt.plot(LP_position[:14], erosion_position[:14] - deposition_position[:14],'b-', label='net erosion lower divertor unit')
-    plt.plot(LP_position[:14], erosion_position[18:32], 'm--', label='erosion upper divertor unit')
-    plt.plot(LP_position[:14], deposition_position[18:32], 'm:', label='deposition upper divertor unit')
-    plt.plot(LP_position[:14], erosion_position[18:32] - deposition_position[18:32], 'm-', label='net erosion upper divertor unit')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel('total layer thickness (m)')
-    plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsLowIotaManual.png', bbox_inches='tight')
-    plt.show()
-    plt.close()
+        #get average ne, Te, Ts distribution per configuration
+        process.frameCalculateAverageQuantityPerConfiguration(['ne', 'Te', 'Ts'], [campaign], configurations, LP_position)
 
-    plt.plot(LP_position[14:], erosion_position[14:18], 'b--', label='erosion lower divertor unit')
-    plt.plot(LP_position[14:], deposition_position[14:18], 'b:', label='deposition lower divertor unit')
-    plt.plot(LP_position[14:], erosion_position[14:18] - deposition_position[14:18], 'b-', label='net erosion lower divertor unit')
-    plt.plot(LP_position[14:], erosion_position[32:], 'm--', label='erosion upper divertor unit')
-    plt.plot(LP_position[14:], deposition_position[32:], 'm:', label='deposition upper divertor unit')
-    plt.plot(LP_position[14:], erosion_position[32:] - deposition_position[32:], 'm-', label='net erosion upper divertor unit')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel('total layer thickness (m)')
-    plt.savefig('results/erosionFullCampaign/totalErosionWholeCampaignAllPositionsHighIotaManual.png', bbox_inches='tight')
-    plt.show()
-    plt.close()
-    '''
+#compare Langmuir Probe and HeBeam data for discharges given in HeBeamReferenceShots
+LPxyz = [OP2_TM2xyz]
+LPxyz.append(OP2_TM3xyz)
+LPxyz = list(itertools.chain.from_iterable(LPxyz))
+
+for shot in HeBeamReferenceShots:
+    read.compareLangmuirProbesWithHeBeam(LPxyz, shot) #incomplete for LPs and different timesteps
+
+#parameter studies
+f_i = f_i
+neList = np.linspace(1e+18, 1e+20, 20)
+TeList = np.linspace(10, 20, 20)
+TsList = np.linspace(30+273.15, 700+273.15, 20)
+alphaList = np.linspace(30 * np.pi/180, 70 * np.pi/180, 20)
+zetaList = np.linspace(1 * np.pi/180, 3 * np.pi/180, 20)
+timestep = np.array([50000]) #duration of the erosion period (e.g. plasma time in campaign OP2.2 and OP2.3)
+plot.parameterStudy(neList, TeList, TsList, alphaList, zetaList, m_i, f_i, ions, k, n_target)
+
+#approximation of layer thicknesses when average distribution of ne, Te, Ts is assumed
+for campaign in ['OP2.2', 'OP2.3', '']:
+    for f_i_vary in [f_i]:
+        for alpha_vary in [alpha]:
+            process.approximationOfLayerThicknessesBasedOnAverageParameterValues(LP_position, campaign, alpha_vary, LP_zeta, m_i, f_i_vary, ions, k, n_target)
+   
 #get impurity concentration trends from Hexos by looking at reference discharges
 #extensions.readHexosForReferenceDischarges()
 
@@ -438,6 +299,3 @@ if __name__ == '__main__':
 #######################################################################################################################################################################
 #references for look-up values
 # Ref.1: D. Naujoks. Plasma-Material Interaction in Controlled Fusion (Vol. 39 in Springer Series on Atomic, Optical, and Plasma Physics). Ed. by G. W. F. Drake, Dr. G. Ecker, and Dr. H. Kleinpoppen. Springer-Verlag Berlin Heidelberg, 2006. 
-
-#DURCHSCHNITTLICHE ENTLADUNG NEHMEN UND ABTRAGUNG FÜR GANZE KAMPAGNE HOCHRECHNEN
-
