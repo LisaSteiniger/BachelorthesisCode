@@ -102,7 +102,7 @@ reReadData = False
 #are missing values of ne, Te, Ts already intrapolated for the given combination of n_target, f_i, alpha (at least partially, missing files will be created anyways)? 
 #-> results/calculationTablesNew/results*.csv
 #set this to False when you changed n_target, f_i, or alpha
-intrapolated = True
+intrapolated = False
 
 #should ne, Te, Ts, Y, Delta_ero, Delta_dep,... be plotted for original and extrapolated data?
 #-> results/plots/*png
@@ -114,6 +114,7 @@ run = True
 
 #######################################################################################################################################################################
 #HERE IS THE RUNNING PROGRAM (SHOULD RUN WITHOUT INTERNAL CHANGES WHEN FINALLY FINISHED)
+
 if not run:
     exit()
 
@@ -132,8 +133,9 @@ if __name__ == '__main__':
     LP_zeta.append(OP2_TM8zeta)
     LP_zeta = list(itertools.chain.from_iterable(LP_zeta))
     #same indices as LP_position
-    
-    for campaign in ['']:#'OP23', 'OP22', '']:      
+
+    erodedMass = []    
+    for campaign in ['OP23', 'OP22', '']:      
         configurations_OP = []  
         for configuration in configurations:     
             #find all discharge IDs according to the filters activated in "filterSelected" 
@@ -245,13 +247,16 @@ if __name__ == '__main__':
         
         #sums up all layer thicknesses of all configurations
         for configLayerThickness in ['all', 'EIM', 'FTM', 'DBM', 'KJM']:
-            process.calculateTotalErodedLayerThicknessWholeCampaign(configurations_OP, configLayerThickness, LP_position, campaign, T_default)    
+            erodedMass.append(process.calculateTotalErodedLayerThicknessWholeCampaign(n_target, configurations_OP, configLayerThickness, LP_position, campaign, T_default))    
 
         #configuration percentages of total runtime in OP2.2/2.3
         read.getRuntimePerConfiguration(configurations, campaign)
 
         #get average ne, Te, Ts distribution per configuration
         process.frameCalculateAverageQuantityPerConfiguration(['ne', 'Te', 'Ts'], [campaign], configurations, LP_position)
+
+print('OP2.3, OP2.2, OP223 -> all, EIM, FTM, DBM, KJM')
+print(erodedMass)
 
 #compare Langmuir Probe and HeBeam data for discharges given in HeBeamReferenceShots
 LPxyz = [OP2_TM2xyz]

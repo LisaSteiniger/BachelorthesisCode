@@ -67,7 +67,7 @@ def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickn
     plt.close()
 
 def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[int|float], deposition: list[int|float],
-                                  iota: str, divertorUnit: str, configuration: str, campaign: str, T_default: str, 
+                                  iota: str, configuration: str, campaign: str, T_default: str, 
                                   extrapolated: bool = False, rates: bool =False, safe: str =''):
     ''' This function plots the erosion, deposition, and net erosion at different positions
         positions are given by the installation locations of Langmuir probes given in "LP_position"
@@ -77,7 +77,6 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
         -> they provide values for all 18 LPs of both divertor units
         -> sorted the same way as LP_position, first lower DU low iota, then lower DU high iota, upper DU low and high iota
         -> "campaign" is either 'OP22', 'OP23', '' (both campaigns), "configuration" the configuration being looked at 
-        divertor unit is determined by "divertorUnit" = 'lower' or 'upper'
         "T_default" adds information on the treatment of missing surface temperature values (e.g. set to 320K)
         "extrapolated" determines if layer thicknesses are purely from measurement data (False) or have been extrapolated for missing measurement values (True)
         "rates" determines if layer thicknesses or erosion/deposition rates are plotted
@@ -92,41 +91,52 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
 
     if rates:
         unitFactor = 1e+9
-        y_label = 'erosion/deposition rates in (nm/s)'
+        y_label = ['erosion/deposition rates lower divertor unit in (nm/s)', 'erosion/deposition rates upper divertor unit in (nm/s)']
         rates = 'Rates'
     else: 
         unitFactor = 1e+3
-        y_label = 'total layer thickness (mm)'
+        y_label = ['total layer thickness lower divertor unit in (mm)', 'total layer thickness upper divertor unit in (mm)']
         rates = ''
 
     if iota == 'low':
-        LP_startIndex = 0
-        LP_stopIndex = 14
-        if divertorUnit == 'lower':
-            erosion_startIndex = 0
-            erosion_stopIndex = 14
-        elif divertorUnit == 'upper':
-            erosion_startIndex = 18
-            erosion_stopIndex = 32
+        LP_startIndex = [0]
+        LP_stopIndex = [14]
+        erosion_startIndex = [[0, 18]]
+        erosion_stopIndex = [[14, 32]]
+        columns = 1
+        y_label = [y_label]
+
     elif iota == 'high':
-        LP_startIndex = 14
-        LP_stopIndex = 18
-        if divertorUnit == 'lower':
-            erosion_startIndex = 14
-            erosion_stopIndex = 18
-        elif divertorUnit == 'upper':
-            erosion_startIndex = 32
-            erosion_stopIndex = 36
+        LP_startIndex = [14]
+        LP_stopIndex = [18]
+        erosion_startIndex = [[14, 32]]
+        erosion_stopIndex = [[18, 36]]
+        columns = 1
+        y_label = [y_label]
+
+    else:
+        LP_startIndex = [0, 14]
+        LP_stopIndex = [14, 18]
+        erosion_startIndex = [[0, 14], [18, 32]]
+        erosion_stopIndex = [[14, 18], [32, 36]]
+        columns = 2
+        y_label = [['Low iota: ' + y_label[0], 'High iota: ' + y_label[0]], ['Low iota: ' + y_label[1], 'High iota: ' + y_label[1]]]
+
+    fig, ax = plt.subplots(2, columns, layout='constrained', figsize=(12, 10), sharex='col', sharey='row')
     
-    plt.plot(LP_position[LP_startIndex:LP_stopIndex], (0 - erosion[erosion_startIndex:erosion_stopIndex])*unitFactor, 'r', label='erosion')
-    plt.plot(LP_position[LP_startIndex:LP_stopIndex], (deposition[erosion_startIndex:erosion_stopIndex])*unitFactor, 'b', label='deposition')
-    plt.plot(LP_position[LP_startIndex:LP_stopIndex], (0 - erosion[erosion_startIndex:erosion_stopIndex] + deposition[erosion_startIndex:erosion_stopIndex])*unitFactor,'k', label='net erosion')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel(y_label)
+    for i in range(2):
+        for j in range(columns):
+            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor, 'r', label='erosion')
+            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (deposition[erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor, 'b', label='deposition')
+            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + deposition[erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor,'k', label='net erosion')
+            ax[i][j].legend()
+            ax[i][j].axhline(0, color='grey')
+            ax[i][j].set_ylabel(y_label[i][j])
+
+            ax[1][j].set_xlabel('distance from pumping gap (m)')
     if safe == '':
-        safe = 'results/erosionFullCampaign/{campaign}_{Ts}_totalErosion{rates}_{config}_{iota}Iota_{DU}DU{extrapolated}.png'.format(campaign=campaign, Ts=T_default, rates=rates, iota=iota, DU=divertorUnit, config=configuration, extrapolated=extrapolated)
-    plt.savefig(safe, bbox_inches='tight')
+        safe = 'results/erosionFullCampaign/{campaign}_{Ts}_totalErosion{rates}_{config}{iota}{extrapolated}.png'.format(campaign=campaign, Ts=T_default, rates=rates, iota='_'+iota+'Iota_', config=configuration, extrapolated=extrapolated)
+    fig.savefig(safe, bbox_inches='tight')
     plt.show()
     plt.close()
 

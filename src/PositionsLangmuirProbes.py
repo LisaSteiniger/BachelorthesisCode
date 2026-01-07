@@ -49,6 +49,6 @@ OP2_TM8xyz = [[0.29669, -5.93902, 0.71571],
 OP1_TM3zeta = [np.deg2rad(2.)] * len(OP1_ProbeTM3)
 OP1_TM4zeta = [np.deg2rad(2.)] * len(OP1_ProbeTM4)
 
-OP2_TM2zeta = [np.deg2rad(2.)] * len(OP2_TM2Distances)
-OP2_TM3zeta = [np.deg2rad(2.)] * len(OP2_TM3Distances)
+OP2_TM2zeta = list(map(np.deg2rad, [1.5, 1, 0.5, 0, 0, 0.5]))
+OP2_TM3zeta = list(map(np.deg2rad, [2, 2, 2.5, 2.5, 3, 3, 3.5, 4]))
 OP2_TM8zeta = [np.deg2rad(2.)] * len(OP2_TM8Distances)

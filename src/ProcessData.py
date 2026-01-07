@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.constants
 
 import src.SputteringYieldFunctions as calc
 #import src.ReadArchieveDB as read
@@ -874,13 +875,14 @@ def calculateTotalErodedLayerThicknessWholeCampaignPerConfig(config: str,
     return 'succesfully calculated total erosion in ' + config
 
 #######################################################################################################################################################################        
-def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str], 
+def calculateTotalErodedLayerThicknessWholeCampaign(n_target: int|float,
+                                                    configurationList: list[str], 
                                                     configurationChosen: str,
                                                     LP_position: list[int|float], 
                                                     campaign: str ='',
                                                     T_default: str ='',
                                                     totalErosionFiles: str ='results/erosionExtrapolatedConfig/totalErosionAtPositionWholeCampaign_',
-                                                    configurationOverview: str ='inputFiles/Overview4.csv') -> None:
+                                                    configurationOverview: str ='inputFiles/Overview4.csv') -> int|float:
     ''' This function calculates total erosion/deposition layer thickness for all LPs that occurred during the whole campaign in all/some configurations listed in "configurationList"
         -> if for a configuration no data exists at a LP position, that can not be taken into account
         -> one value for erosion/deposition layer thickness of each LP by adding up the values of each configuration 
@@ -893,8 +895,8 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
         -> that file contains a DataFrame with the total erosion/deposition layer thicknesses of a configuration (keys like 'LP', 'erosion_total' 'netErosion_total', 'deposition_total')
         -> such a file can be created by running "calculateTotalErodedLayerThicknessWholeCampaignPerConfig"
         "configurationOverview" is an overview file containing information about the iota of each configuration ever released 
-
-        Returns nothing but saves the calculation results in .csv file under 'results/erosionFullCampaign/totalErosionWholeCampaignAllPositions.csv' '''
+        "n_target" is the atomic density of the divertor target
+        Returns mass of eroded material in g and saves the calculation results in .csv file under 'results/erosionFullCampaign/totalErosionWholeCampaignAllPositions.csv' '''
     config_missing = [] #configurations, which are released but never used (no discharges)
 
     #for not extraplated values -> missing configurations are missing##############
@@ -960,16 +962,16 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
     print(deposition_rate)   
 
     #plot low iota, not extrapolated
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'low', 'lower', configurationChosen, campaign, T_default)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'low', 'lower', configurationChosen, campaign, T_default, False, True)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'low', 'upper', configurationChosen, campaign, T_default)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'low', 'upper', configurationChosen, campaign, T_default, False, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, '', configurationChosen, campaign, T_default)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, '', configurationChosen, campaign, T_default, False, True)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'low', configurationChosen, campaign, T_default)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'low', configurationChosen, campaign, T_default, False, True)
 
     #plot high iota, not extrapolated
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'high', 'lower', configurationChosen, campaign, T_default)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'high', 'lower', configurationChosen, campaign, T_default, False, True)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'high', 'upper', configurationChosen, campaign, T_default)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'high', 'upper', configurationChosen, campaign, T_default, False, True)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'high', configurationChosen, campaign, T_default)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'high', configurationChosen, campaign, T_default, False, True)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'high', configurationChosen, campaign, T_default)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'high', configurationChosen, campaign, T_default, False, True)
 
     #end of: for not extraplated values -> missing configurations are missing##############
     
@@ -1134,26 +1136,42 @@ def calculateTotalErodedLayerThicknessWholeCampaign(configurationList: list[str]
         erosion_rate_total = np.zeros_like(erosion_rate_total)
         deposition_rate_total = np.zeros_like(erosion_rate_total)
 
-    print(erosion_rate_total)
-    print(deposition_rate_total)
-    print(duration_total)
     #plot low iota, extrapolated
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'low', 'lower', configurationChosen, campaign, T_default, True)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'low', 'lower', configurationChosen, campaign, T_default, True, True)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'low', 'upper', configurationChosen, campaign, T_default, True)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'low', 'upper', configurationChosen, campaign, T_default, True, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, '', configurationChosen, campaign, T_default, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, '', configurationChosen, campaign, T_default, True, True)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'low', configurationChosen, campaign, T_default, True)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'low', configurationChosen, campaign, T_default, True, True)
     
     #plot high iota, extrapolated
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'high', 'lower', configurationChosen, campaign, T_default, True)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'high', 'lower', configurationChosen, campaign, T_default, True, True)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'high', 'upper', configurationChosen, campaign, T_default, True)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'high', 'upper', configurationChosen, campaign, T_default, True, True)
- 
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, '', configurationChosen, campaign, T_default, True)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'high', configurationChosen, campaign, T_default, True, True)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'high', configurationChosen, campaign, T_default, True)
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'high', configurationChosen, campaign, T_default, True, True)
+    
+    mass = approximationErodedMaterialMassWholeCampaign(LP_position, erosion_total, deposition_total, n_target)
+
     #end of: for extraplated values -> extrapolate values for missing configurations generally##################
     if configurationChosen == 'all':
         configurationChosen = 'WholeCampaign'
     dataOverview.to_csv('results/erosionFullCampaign/{campaign}_{Ts}_totalErosion{configuration}AllPositions.csv'.format(campaign=campaign, Ts=T_default, configuration=configurationChosen), sep=';')
     dataOverview3.to_csv('results/erosionFullCampaign/{campaign}_{Ts}_totalErosion{configuration}AllPositionsExtrapolated.csv'.format(campaign=campaign, Ts=T_default, configuration=configurationChosen), sep=';')
+
+    return mass
+
+##################################################################################################################################################################
+def approximationErodedMaterialMassWholeCampaign(LP_position: list[int|float], erosion: list[int|float], deposition: list[int|float], n_target: int|float, M_target: int|float =12.011) -> float:
+    LP_position = list(itertools.chain.from_iterable([LP_position, LP_position]))
+    indices = [0, 14, 18, 32, 36]
+    volume = 0
+    for i in [0, 2]:#for i in range(len(indices) - 1):
+        crossSection = 0
+        for j in range(indices[i], indices[i + 1] - 1):
+            delta_x = LP_position[j + 1] - LP_position[j]
+            erosion_av = (erosion[j + 1] - erosion[j])/2
+            deposition_av = (deposition[j + 1] - deposition[j])/2
+            crossSection += delta_x * (erosion_av - deposition_av) 
+        volume += crossSection * 0.5 * 1/(LP_position[indices[i + 1] - 1] - LP_position[indices[i]])
+    return n_target * M_target * volume/scipy.constants.N_A
 
 ##################################################################################################################################################################
 def calculateAverageQuantityPerConfiguration(quantity: str,
@@ -1261,25 +1279,23 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
     if not os.path.exists('results/averageQuantities/{quantity}/{config}'.format(quantity=quantity, config=config)):
         os.makedirs('results/averageQuantities/{quantity}/{config}'.format(quantity=quantity, config=config)) 
 
-    plt.plot(LP_position[14:], averageConfiguration[14:18], 'b', label='lower divertor unit')
-    plt.plot(LP_position[14:], averageConfiguration[32:], 'm', label='upper divertor unit')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel('average ' + quantity)
-    plt.savefig('results/averageQuantities/{quantity}/{config}/{quantity}{campaign}{config}AverageAllPositionsHighIota.png'.format(quantity=quantity, campaign=campaign, config=config), bbox_inches='tight')
-    plt.show()
-    plt.close()
+    fig, ax = plt.subplots(2, 1, layout='constrained', figsize=(7, 10), sharex=True)
 
-    plt.plot(LP_position[:14], averageConfiguration[:14], 'b', label='lower divertor unit')
-    plt.plot(LP_position[:14], averageConfiguration[18:32], 'm', label='upper divertor unit')
-    plt.legend()
-    plt.xlabel('distance from pumping gap (m)')
-    plt.ylabel('average ' + quantity)
-    plt.savefig('results/averageQuantities/{quantity}/{config}/{quantity}{campaign}{config}AverageAllPositionsLowIota.png'.format(quantity=quantity, campaign=campaign, config=config), bbox_inches='tight')
+    ax[0].plot(LP_position[:14], averageConfiguration[:14], 'b', label='lower divertor unit')
+    ax[0].plot(LP_position[:14], averageConfiguration[18:32], 'm', label='upper divertor unit')
+    ax[0].legend()
+    ax[0].set_ylabel('Low iota: average ' + quantity)
+    ax[1].plot(LP_position[14:], averageConfiguration[14:18], 'b', label='lower divertor unit')
+    ax[1].plot(LP_position[14:], averageConfiguration[32:], 'm', label='upper divertor unit')
+    ax[1].legend()
+    ax[1].set_xlabel('distance from pumping gap (m)')
+    ax[1].set_ylabel('High iota: average ' + quantity)
+    fig.savefig('results/averageQuantities/{quantity}/{config}/{quantity}{campaign}{config}AverageAllPositions.png'.format(quantity=quantity, campaign=campaign, config=config), bbox_inches='tight')
     plt.show()
     plt.close()
 
     return averageConfiguration, timeConfiguration
+##################################################################################################################################################################
 
 def frameCalculateAverageQuantityPerConfiguration(quantities: list[str], 
                                                   campaigns: list[str], 
@@ -1299,9 +1315,12 @@ def frameCalculateAverageQuantityPerConfiguration(quantities: list[str],
             for config in configurations:
                 
                 if type(config_short) != bool:
+                    configChosen = config_short
                     if not config.startswith(config_short):
                         print(config + 'not matching configuration group ' + config_short)
                         continue
+                else:
+                    configChosen = ''
 
                 resultAverage = calculateAverageQuantityPerConfiguration(quantity, config, LP_position, campaign)
                 if type(resultAverage) == str:
@@ -1312,21 +1331,18 @@ def frameCalculateAverageQuantityPerConfiguration(quantities: list[str],
         
             averageCampaign = averageCampaign/timeCampaign
 
-            plt.plot(LP_position[14:], averageCampaign[14:18], 'b', label='lower divertor unit')
-            plt.plot(LP_position[14:], averageCampaign[32:], 'm', label='upper divertor unit')
-            plt.legend()
-            plt.xlabel('distance from pumping gap (m)')
-            plt.ylabel('average ' + quantity)
-            plt.savefig('results/averageQuantities/{quantity}/{quantity}{campaign}AverageAllPositionsHighIota.png'.format(quantity=quantity, campaign=campaign), bbox_inches='tight')
-            plt.show()
-            plt.close()
+            fig, ax = plt.subplots(2, 1, layout='constrained', figsize=(7, 10), sharex=True)
 
-            plt.plot(LP_position[:14], averageCampaign[:14], 'b', label='lower divertor unit')
-            plt.plot(LP_position[:14], averageCampaign[18:32], 'm', label='upper divertor unit')
-            plt.legend()
-            plt.xlabel('distance from pumping gap (m)')
-            plt.ylabel('average ' + quantity)
-            plt.savefig('results/averageQuantities/{quantity}/{quantity}{campaign}AverageAllPositionsLowIota.png'.format(quantity=quantity, campaign=campaign), bbox_inches='tight')
+            ax[1].plot(LP_position[14:], averageCampaign[14:18], 'b', label='lower divertor unit')
+            ax[1].plot(LP_position[14:], averageCampaign[32:], 'm', label='upper divertor unit')
+            ax[0].plot(LP_position[:14], averageCampaign[:14], 'b', label='lower divertor unit')
+            ax[0].plot(LP_position[:14], averageCampaign[18:32], 'm', label='upper divertor unit')
+            ax[0].legend()
+            ax[1].legend()
+            ax[1].set_xlabel('distance from pumping gap (m)')
+            ax[0].set_ylabel('Low iota: average ' + quantity)
+            ax[1].set_ylabel('High iota: average ' + quantity)
+            fig.savefig('results/averageQuantities/{quantity}/{quantity}{campaign}{configChosen}AverageAllPositionsHighIota.png'.format(quantity=quantity, campaign=campaign, configChosen=configChosen), bbox_inches='tight')
             plt.show()
             plt.close()
 
@@ -1365,7 +1381,7 @@ def approximationOfLayerThicknessesBasedOnAverageParameterValues(LP_position: li
     erosion = np.array(list(itertools.chain.from_iterable(erosion)))
     deposition = np.array(list(itertools.chain.from_iterable(deposition)))
 
-    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'low', 'lower', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_LowIota_LowerDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
-    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'low', 'upper', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_LowIota_UpperDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
-    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'high', 'lower', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_HighIota_LowerDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
-    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'high', 'upper', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_HighIota_UpperDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
+    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, '', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_LowIota_LowerDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'low', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_LowIota_UpperDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'high', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_HighIota_LowerDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
+    #plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'high' 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_HighIota_UpperDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
