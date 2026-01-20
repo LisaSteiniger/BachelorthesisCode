@@ -14,13 +14,13 @@ import scipy.integrate as integrate
 
 from src.settings import e, k_B, k, u, E_TF, E_s, Q_y_chem, C_d_chem, E_thd_chem, E_ths_chem, E_th_chem, lambda_nr, lambda_nl, m_i, ions
 #import src.MarkusFunctions as MarkusFunctions
-#import src.Unused as extensions
+import src.Unused as extensions
 import src.SputteringYieldFunctions as calc
 import src.ProcessData as process
 import src.ReadArchieveDB as read
 import src.PlotData as plot
 #import src.CXRS
-from src.PositionsLangmuirProbes import OP2_TM2Distances, OP2_TM3Distances, OP2_TM8Distances, OP2_TM2zeta, OP2_TM3zeta, OP2_TM8zeta, OP2_TM2xyz, OP2_TM3xyz, OP2_TM8xyz
+from src.PositionsLangmuirProbes import OP2_TM2Distances, OP2_TM3Distances, OP2_TM8Distances, OP2_TM2zeta_lowIota, OP2_TM3zeta_lowIota, OP2_TM8zeta_lowIota, OP2_TM2zeta_standardIota, OP2_TM3zeta_standardIota, OP2_TM8zeta_standardIota, OP2_TM2zeta_highIota, OP2_TM3zeta_highIota, OP2_TM8zeta_highIota, OP2_TM2xyz, OP2_TM3xyz, OP2_TM8xyz
 
 #avoids pop up of plot windows
 matplotlib.use('agg')
@@ -69,10 +69,15 @@ configurations = pd.read_csv('inputFiles/Overview2.csv')['configuration']
 #if iota information is missing, activate ('inputFiles/Overview4.csv' with columns 'IA [A]' and 'IB [A]' must exist):
 #read.determineIotaForAllConfigurations()
 
+#list of campaigns to be looked at, '' means OP2.2 and OP2.3
+campaigns = ['', 'OP22', 'OP23']
+
 #reference discharges for impurity concentration analysis of carbon and oxygen by CXRS and DRGA
 impurityReferenceShots = ['20250304.075', '20250408.055', '20250408.079']
 
 HeBeamReferenceShots = ['20250507.007', '20250507.009', '20250508.071', '20250320.077']
+
+excluded = []#['20241105.027', '20241105.028', '20241105.029', '20241105.030', '20241105.031', '20241105.032', '20241105.033', '20241105.034', '20241105.035', '20241105.036', '20241105.037', '20241105.038', '20241105.039', '20241105.040', '20241105.041', '20241105.043', '20241105.058', '20241105.061', '20241105.062', '20241105.063', '20241105.065', '20241105.066', '20241105.067', '20241105.068', '20241106.023', '20241106.028', '20241128.068', '20241128.070']
 
 #alternative:
 #manual set up of all configurations to be looked at
@@ -101,7 +106,7 @@ reReadData = False
 
 #are missing values of ne, Te, Ts already intrapolated for the given combination of n_target, f_i, alpha (at least partially, missing files will be created anyways)? 
 #-> results/calculationTablesNew/results*.csv
-#set this to False when you changed n_target, f_i, or alpha
+#set this to False when you changed n_target, f_i, alpha, or zeta
 intrapolated = False
 
 #should ne, Te, Ts, Y, Delta_ero, Delta_dep,... be plotted for original and extrapolated data?
@@ -110,11 +115,35 @@ plottingOriginalData = False
 plottingExtrapolatedData = False
 
 #should the main program run or is just some other testing going on? -> only commands above "if not run:" will be executed
-run = True
+run = False
 
+'''
+LP_zeta_low = [OP2_TM2zeta_lowIota]
+LP_zeta_low.append(OP2_TM3zeta_lowIota)
+LP_zeta_low.append(OP2_TM8zeta_lowIota)
+
+LP_zeta_standard = [OP2_TM2zeta_standardIota]
+LP_zeta_standard.append(OP2_TM3zeta_standardIota)
+LP_zeta_standard.append(OP2_TM8zeta_standardIota)
+
+LP_zeta_high = [OP2_TM2zeta_highIota]
+LP_zeta_high.append(OP2_TM3zeta_highIota)
+LP_zeta_high.append(OP2_TM8zeta_highIota)
+
+LP_zeta_low = list(itertools.chain.from_iterable(LP_zeta_low))
+LP_zeta_standard = list(itertools.chain.from_iterable(LP_zeta_standard))
+LP_zeta_high = list(itertools.chain.from_iterable(LP_zeta_high))
+print(np.round(np.array(list(map(np.rad2deg, LP_zeta_low))), 3))
+print(np.round(np.array(list(map(np.rad2deg, LP_zeta_standard))), 3))
+print(np.round(np.array(list(map(np.rad2deg, LP_zeta_high))), 3))
+'''
 #######################################################################################################################################################################
-#HERE IS THE RUNNING PROGRAM (SHOULD RUN WITHOUT INTERNAL CHANGES WHEN FINALLY FINISHED)
-
+#HERE IS THE RUNNING PROGRAM, NO CHANGES REQUIRED
+plot.plotSputteringYieldsInDependence(5e+18, 15, 320, alpha, np.deg2rad(2), m_i, f_i, ions, k, 1e+29)
+plot.plotEnergyDistribution(15, ['H', 'C', 'O'])
+print(calc.calculateTotalErosionYield('H', 15, 'C', alpha, 320, 6.66e+21, 1e+29, True))
+print(calc.calculateTotalErosionYield('C', 15, 'C', alpha, 320, 6.66e+21, 1e+29, True))
+print(calc.calculateTotalErosionYield('O', 15, 'C', alpha, 320, 6.66e+21, 1e+29, True))
 if not run:
     exit()
 
@@ -128,14 +157,28 @@ if __name__ == '__main__':
     #LP_position: index 0 - 5 are langmuir probes on TM2h07, 6 - 13 on TM3h01, 14 - 17 on TM8h01 (distance from pumping gap is increasing)
 
     #read incident angles of the magnetic field lines on the targets zeta (measured from the target surface towards the surface normal) in [rad] 
-    LP_zeta = [OP2_TM2zeta]
-    LP_zeta.append(OP2_TM3zeta)
-    LP_zeta.append(OP2_TM8zeta)
-    LP_zeta = list(itertools.chain.from_iterable(LP_zeta))
+    LP_zeta_low = [OP2_TM2zeta_lowIota]
+    LP_zeta_low.append(OP2_TM3zeta_lowIota)
+    LP_zeta_low.append(OP2_TM8zeta_lowIota)
+    
+    LP_zeta_standard = [OP2_TM2zeta_standardIota]
+    LP_zeta_standard.append(OP2_TM3zeta_standardIota)
+    LP_zeta_standard.append(OP2_TM8zeta_standardIota)
+    
+    LP_zeta_high = [OP2_TM2zeta_highIota]
+    LP_zeta_high.append(OP2_TM3zeta_highIota)
+    LP_zeta_high.append(OP2_TM8zeta_highIota)
+    
+    LP_zeta_low = list(itertools.chain.from_iterable(LP_zeta_low))
+    LP_zeta_standard = list(itertools.chain.from_iterable(LP_zeta_standard))
+    LP_zeta_high = list(itertools.chain.from_iterable(LP_zeta_high))
+    LP_zetas = [LP_zeta_low, LP_zeta_standard, LP_zeta_high]
     #same indices as LP_position
 
+    averageFrame = pd.DataFrame({}) #will hold average values of ne, Te, Ts at all LP positions for each campaign (total, EIM, FTM, DMB, KJM)
     erodedMass = []    
-    for campaign in ['OP23', 'OP22', '']:      
+    configurationOverviewTable = pd.read_csv('inputFiles/Overview4.csv', sep=';')
+    for campaign in campaigns:      
         configurations_OP = []  
         for configuration in configurations:     
             #find all discharge IDs according to the filters activated in "filterSelected" 
@@ -148,8 +191,17 @@ if __name__ == '__main__':
                 continue    #skip this configuration as no discharges were found
             else:
                 configurations_OP.append(configuration)
+
+                indexIota = list(configurationOverviewTable['configuration']).index(configuration)
+                if list(configurationOverviewTable['iota'])[indexIota] == 'low':
+                    LP_zeta = LP_zetas[0]
+                elif list(configurationOverviewTable['iota'])[indexIota] == 'standard':
+                    LP_zeta = LP_zetas[1]
+                elif list(configurationOverviewTable['iota'])[indexIota] == 'high':
+                    LP_zeta = LP_zetas[2]
+
                 pass    #continue with this configuration as some discharges were found
-            
+
             #_lower indicates lower divertor unit, _upper upper divertor unit   
             
             #will hold the dischargeIDs that miss data because LP data/IRcam data/trigger data is not available 
@@ -159,6 +211,21 @@ if __name__ == '__main__':
             #run through discharges and read LP and IRcam data before performing calculations with them
             for counter, discharge in enumerate(discharges['dischargeID'][:]):
                 discharge = str(discharge)
+
+                if discharge[-2] == '.':
+                    discharge = discharge + '00'
+                elif discharge[-3] == '.':
+                    discharge = discharge + '0'
+
+                '''
+                if discharge in excluded:
+                    plottingOriginalData = True
+                    #plottingExtrapolatedData = True
+                else:
+                    plottingOriginalData = False
+                    #plottingExtrapolatedData = False
+                '''
+
                 print('xdrive/archive: reading' + configuration + ' ' + discharge)
                 #tests if data was already read out and saved, in that case reading data is skipped for the discharge in question
                 if not reReadData:
@@ -239,7 +306,7 @@ if __name__ == '__main__':
             print('configuration {config}: no trigger {trigger}, no IR {IR}, no LP {LP}'.format(config=configuration, trigger=len(not_workingTrigger), LP=len(not_workingLP), IR=len(not_workingIR)))
             
             #intrapolate missing values, calculate total eroded layer thickness, saves that for all discharges of one configuration in a table
-            erosionTable = process.calculateTotalErodedLayerThicknessSeveralDischarges(configuration, discharges['dischargeID'], discharges['duration'], discharges['overviewTable'], alpha, LP_zeta, m_i, f_i, ions, k, n_target, defaultValues, intrapolated=intrapolated, plotting=plottingExtrapolatedData)
+            erosionTable = process.calculateTotalErodedLayerThicknessSeveralDischarges(configuration, discharges['dischargeID'], discharges['duration'], discharges['overviewTable'], alpha, LP_zeta, m_i, f_i, ions, k, n_target, defaultValues, intrapolated=intrapolated, plotting=plottingExtrapolatedData, excluded=excluded)
             
             #sums up all layer thicknesses of all discharges of that configuration to end up with one value for erosion/deposition/net erosion per LP
             #pays attention to discharges with missing data by setting Delta_total = Delta_known * t_total/t_known
@@ -253,10 +320,27 @@ if __name__ == '__main__':
         read.getRuntimePerConfiguration(configurations, campaign)
 
         #get average ne, Te, Ts distribution per configuration
-        process.frameCalculateAverageQuantityPerConfiguration(['ne', 'Te', 'Ts'], [campaign], configurations, LP_position)
+        quantities = ['ne', 'Te', 'Ts']
+        for config_short in [False, 'EIM', 'FTM', 'DBM', 'KJM']:
+            averages = process.frameCalculateAverageQuantityPerConfiguration(quantities, [campaign], configurations, LP_position, config_short, excluded)
+            if type(config_short) == bool:
+                config_short = 'all'
+            if campaign == '':
+                campaignTXT = 'OP223'
+            else:
+                campaignTXT = campaign
+            for i, quantity in enumerate(quantities):
+                averageFrame[campaignTXT + config_short + quantity] = averages[i]
 
-print('OP2.3, OP2.2, OP223 -> all, EIM, FTM, DBM, KJM')
-print(erodedMass)
+        #when both campaigns are treated together first, all result/calculationTableNew files are already intrapolated with the corrected parameters and it must not be done again for OP2.2 and OP2.3    
+        if campaigns[0] == '':
+            intrapolated = True
+
+averageFrame.to_csv('results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv', sep=';')
+
+#print(erodedMass[0])
+for campaignIndex, OP in enumerate(campaigns):
+    print(f'mass of net eroded/eroded/deposited material in g for {OP} all configurations: ' + str(erodedMass[campaignIndex*5][0]) +' / '+ str(-erodedMass[campaignIndex*5][1]) +' / '+ str(erodedMass[campaignIndex*5][2]))
 
 #compare Langmuir Probe and HeBeam data for discharges given in HeBeamReferenceShots
 LPxyz = [OP2_TM2xyz]
@@ -265,6 +349,9 @@ LPxyz = list(itertools.chain.from_iterable(LPxyz))
 
 for shot in HeBeamReferenceShots:
     read.compareLangmuirProbesWithHeBeam(LPxyz, shot) #incomplete for LPs and different timesteps
+
+#subresults (flux densities, physical and chemical sputtering yield, eroded and deposited layer thicknesses) for a set of ne, Te, Ts, alpha, zeta, t
+#process.subresults(m_i, f_i, ions)
 
 #parameter studies
 f_i = f_i
@@ -277,13 +364,16 @@ timestep = np.array([50000]) #duration of the erosion period (e.g. plasma time i
 plot.parameterStudy(neList, TeList, TsList, alphaList, zetaList, m_i, f_i, ions, k, n_target)
 
 #approximation of layer thicknesses when average distribution of ne, Te, Ts is assumed
-for campaign in ['OP2.2', 'OP2.3', '']:
-    for f_i_vary in [f_i]:
-        for alpha_vary in [alpha]:
-            process.approximationOfLayerThicknessesBasedOnAverageParameterValues(LP_position, campaign, alpha_vary, LP_zeta, m_i, f_i_vary, ions, k, n_target)
-   
+mass = []
+for campaign in ['OP22', 'OP23', '']:
+    for configuration, LP_zeta in zip(['all', 'EIM', 'FTM', 'DBM', 'KJM'], [LP_zetas[1], LP_zetas[1], LP_zetas[2], LP_zetas[0], LP_zetas[1]]):
+        for f_i_vary in [f_i]:
+            for alpha_vary in [alpha]:
+                mass.append(process.approximationOfLayerThicknessesBasedOnAverageParameterValues(LP_position, campaign, alpha_vary, LP_zeta, m_i, f_i_vary, ions, k, n_target, 'results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv', configuration))
+                print(f_i_vary, alpha_vary, mass[-1])
 #get impurity concentration trends from Hexos by looking at reference discharges
 #extensions.readHexosForReferenceDischarges()
+#extensions.readHexosForReferenceDischargesAveraged()
 
 #get impurity concentrations for C and O from CXRS for "impurityReferenceShots"
 #for shot in impurityReferenceShots:
@@ -304,3 +394,10 @@ for campaign in ['OP2.2', 'OP2.3', '']:
 #######################################################################################################################################################################
 #references for look-up values
 # Ref.1: D. Naujoks. Plasma-Material Interaction in Controlled Fusion (Vol. 39 in Springer Series on Atomic, Optical, and Plasma Physics). Ed. by G. W. F. Drake, Dr. G. Ecker, and Dr. H. Kleinpoppen. Springer-Verlag Berlin Heidelberg, 2006. 
+
+'''
+nothing excluded, T_default = 320 K, f_i = [0.89, 0, 0, 0.04, 0.01], alpha = 40°, zeta according to M.Endler (compare distance from PG)
+mass of net eroded/eroded/deposited material in g for  all configurations: -51.548842080843706 / -284.4943985212966 / 232.94555644045295
+mass of net eroded/eroded/deposited material in g for OP22 all configurations: -41.05019345273703 / -157.2008130963548 / 116.15061964361779
+mass of net eroded/eroded/deposited material in g for OP23 all configurations: -13.90214578745139 / -128.47154645796073 / 114.56940067050932
+'''

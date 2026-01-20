@@ -189,7 +189,7 @@ def readHexosForReferenceDischarges(dischargeID: list[str] =['20241008.40', '202
                                                                 '20250311.62', '20250312.71', '20250325.65', '20250424.6', '20250506.9', '20250513.6', '20250513.54', '20250514.10', '20250521.9']) -> None:
     ''' This function reads out the intensities of the spectral lines of CII and OIII ions in the core plasma measured by HEXOS for a given list of (reference) discharges
         -> this should help to find trends in the impurity concentrations of carbon and oxygen during OP2.2/2.3'''
-    
+    #####old version of readHexosForReferenceDischargesAveraged    
     urlHexos = {'CII': "ArchiveDB/raw/W7XAnalysis/QSD_HEXOS/EmissionLinesSpec4_auto_DATASTREAM/V1/35/C-II_133.510nm_simpson",
                 'OIII': "ArchiveDB/raw/W7XAnalysis/QSD_HEXOS/EmissionLinesSpec4_auto_DATASTREAM/V1/15/O-III_83.430nm_simpson"}
 
@@ -204,8 +204,12 @@ def readHexosForReferenceDischarges(dischargeID: list[str] =['20241008.40', '202
 
         #try to average the signal for each phase of the reference discharge
         data_C, data_O, time_C, time_O = [], [], [], []
-        steps_timeC = [[list(data['CII'][0]).index(0.2), list(data['CII'][0]).index(2.8)], [list(data['CII'][0]).index(3.2), list(data['CII'][0]).index(8.8)], [list(data['CII'][0]).index(9.2), list(data['CII'][0]).index(14.8)]]
-        steps_timeO = [[list(data['OIII'][0]).index(0.2), list(data['OIII'][0]).index(2.8)], [list(data['OIII'][0]).index(3.2), list(data['OIII'][0]).index(8.8)], [list(data['OIII'][0]).index(9.2), list(data['OIII'][0]).index(14.8)]]
+        steps_timeC = [[list(np.round(np.array(data['CII'][0]), 1)).index(0.2), list(np.round(np.array(data['CII'][0]), 1)).index(2.8)], 
+                       [list(np.round(np.array(data['CII'][0]), 1)).index(3.2), list(np.round(np.array(data['CII'][0]), 1)).index(8.8)], 
+                       [list(np.round(np.array(data['CII'][0]), 1)).index(9.2), list(np.round(np.array(data['CII'][0]), 1)).index(14.8)]]
+        steps_timeO = [[list(np.round(np.array(data['OIII'][0]), 1)).index(0.2), list(np.round(np.array(data['OIII'][0]), 1)).index(2.8)], 
+                       [list(np.round(np.array(data['OIII'][0]), 1)).index(3.2), list(np.round(np.array(data['OIII'][0]), 1)).index(8.8)], 
+                       [list(np.round(np.array(data['OIII'][0]), 1)).index(9.2), list(np.round(np.array(data['OIII'][0]), 1)).index(14.8)]]
         
         for step_C, step_O in zip(steps_timeC, steps_timeO):
             time_C.append(data['CII'][0][step_C[0]:step_C[1]])
@@ -248,10 +252,17 @@ def readHexosForReferenceDischargesAveraged(dischargeID: list[str] =['20241008.4
                 'OIII': "ArchiveDB/raw/W7XAnalysis/QSD_HEXOS/EmissionLinesSpec4_auto_DATASTREAM/V1/15/O-III_83.430nm_simpson"}
 
     fig, ax = plt.subplots(2, 2, layout='constrained', figsize=(15, 10), sharey='row')
-    for shotnumber in dischargeID:
+    fig2, ax2 = plt.subplots(1, 1, layout='constrained')
+    
+    for counter, shotnumber in enumerate(dischargeID):
         if float(shotnumber)<20250000:
             i = 0
+            changed = False
         else:
+            if i == 0:
+                changed = True
+            else:
+                changed = False
             i = 1
 
         data = w7xarchive.get_signal_for_program(urlHexos, shotnumber)
@@ -285,7 +296,16 @@ def readHexosForReferenceDischargesAveraged(dischargeID: list[str] =['20241008.4
 
         ax[0][i].plot(time_C, data_C, label=shotnumber)
         ax[1][i].plot(time_O, data_O, label=shotnumber)
-
+        
+        print(shotnumber)
+        if counter == 0:
+            ax2.plot(counter, data_C[2], 'bx', label='C-II  (133.510nm)')
+            ax2.plot(counter, data_O[2], 'rx', label='O-III  (83.430nm)')
+        else:
+            ax2.plot(counter, data_C[2], 'bx')
+            ax2.plot(counter, data_O[2], 'rx')
+        if i == 1 and changed:
+            ax2.axvline(counter - 0.5, color='grey', label='limit between OP2.2 and OP2.3')
     ax[0][0].set_xlabel('time t in (s)')
     ax[0][1].set_xlabel('time t in (s)')
     ax[1][0].set_xlabel('time t in (s)')
@@ -300,7 +320,16 @@ def readHexosForReferenceDischargesAveraged(dischargeID: list[str] =['20241008.4
     ax[1][1].legend(loc='center left', bbox_to_anchor=(1, 0.5))
     fig.savefig('results/impurities/HexosTrends_CII_OIII_throughReferenceDischargesAverages.png', bbox_inches='tight')
     fig.show()
+
+    ax2.set_xlabel('number of reference discharge')
+    ax2.set_ylabel('averaged intensity of spectral line')
+    ax2.legend()
+    fig2.savefig('results/impurities/HexosTrends_CII_OIII_2ndIntervalPerDate.png', bbox_inches='tight')
+    fig2.show()
+
     plt.close()
+
+
 
 #######################################################################################################################################################################
 def calculateFluxErodedParticlesGross(flux_electron: int|float, Y: list, f: list, P_redeposition: int|float, stickingCoefficient: int|float, Y_selfSputtering: int|float) -> float:                                                          

@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import itertools
 import src.ProcessData as process
+import src.SputteringYieldFunctions as calc
 
+#######################################################################################################################################################################        
 def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickness, depositionRate_dt, depositedLayerThickness, dt, timesteps, safe):
     ''' plot sputtering yields, erosion rate, total eroded layer thickness, and electron temperature, surface temperature, density over time for one discharge and one langmuir probe
         all input parameters besides "safe" should be provided as 1D lists/arrays representing measurement/calculation values at one position/langmuir probe over the same number of timesteps
@@ -66,9 +68,10 @@ def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickn
     fig.show()
     plt.close()
 
-def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[int|float], deposition: list[int|float],
+#######################################################################################################################################################################        
+def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[int|float|list[int|float]], deposition: list[int|float|list[int|float]],
                                   iota: str, configuration: str, campaign: str, T_default: str, 
-                                  extrapolated: bool = False, rates: bool =False, safe: str =''):
+                                  extrapolated: bool = False, rates: bool|str =False, safe: str =''):
     ''' This function plots the erosion, deposition, and net erosion at different positions
         positions are given by the installation locations of Langmuir probes given in "LP_position"
         -> depending on "iota" the corresponding locations are chosen from that list 
@@ -79,7 +82,7 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
         -> "campaign" is either 'OP22', 'OP23', '' (both campaigns), "configuration" the configuration being looked at 
         "T_default" adds information on the treatment of missing surface temperature values (e.g. set to 320K)
         "extrapolated" determines if layer thicknesses are purely from measurement data (False) or have been extrapolated for missing measurement values (True)
-        "rates" determines if layer thicknesses or erosion/deposition rates are plotted
+        "rates" determines if layer thicknesses or erosion/deposition rates or both ('both') are plotted
         "safe" is where to safe the figure'''
     if configuration == 'all':
         configuration = 'wholeCampaign'
@@ -89,14 +92,24 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
     else:
         extrapolated = ''
 
-    if rates:
-        unitFactor = 1e+9
-        y_label = ['erosion/deposition rates lower divertor unit in (nm/s)', 'erosion/deposition rates upper divertor unit in (nm/s)']
-        rates = 'Rates'
-    else: 
-        unitFactor = 1e+3
-        y_label = ['total layer thickness lower divertor unit in (mm)', 'total layer thickness upper divertor unit in (mm)']
+    if type(rates) == bool:
+        if rates:
+            unitFactor = [1e+9]
+            y_label = [[['erosion/deposition rates lower divertor unit in (nm/s)'], ['erosion/deposition rates upper divertor unit in (nm/s)']]]
+            rates = 'Rates'
+        else: 
+            unitFactor = [1e+3]
+            y_label = [[['total layer thickness lower divertor unit in (mm)'], ['total layer thickness upper divertor unit in (mm)']]]
+            rates = 'Layers'
+
+        erosion = [erosion]
+        deposition = [deposition]
+
+    elif rates == 'both':
         rates = ''
+        y_label = [[['total layer thickness lower divertor unit in (mm)'], ['total layer thickness upper divertor unit in (mm)']], [['erosion/deposition rates lower divertor unit in (nm/s)'], ['erosion/deposition rates upper divertor unit in (nm/s)']]]
+        unitFactor = [1e+3, 1e+9]
+
 
     if iota == 'low':
         LP_startIndex = [0]
@@ -104,7 +117,7 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
         erosion_startIndex = [[0, 18]]
         erosion_stopIndex = [[14, 32]]
         columns = 1
-        y_label = [y_label]
+        #y_label = [y_label]
 
     elif iota == 'high':
         LP_startIndex = [14]
@@ -112,7 +125,7 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
         erosion_startIndex = [[14, 32]]
         erosion_stopIndex = [[18, 36]]
         columns = 1
-        y_label = [y_label]
+        #y_label = [y_label]
 
     else:
         LP_startIndex = [0, 14]
@@ -120,26 +133,70 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
         erosion_startIndex = [[0, 14], [18, 32]]
         erosion_stopIndex = [[14, 18], [32, 36]]
         columns = 2
-        y_label = [['Low iota: ' + y_label[0], 'High iota: ' + y_label[0]], ['Low iota: ' + y_label[1], 'High iota: ' + y_label[1]]]
+        y_label_help = [[['Low iota: ' + y_label[0][0][0], 'High iota: ' + y_label[0][0][0]], 
+                    ['Low iota: layers ' + y_label[0][1][0], 'High iota: ' + y_label[0][1][0]]]]
+        
+        if rates == '':
+            y_label_help.append([['Low iota: ' + y_label[1][0][0], 'High iota: ' + y_label[1][0][0]], 
+                    ['Low iota: layers ' + y_label[1][1][0], 'High iota: ' + y_label[1][1][0]]])
+            y_label = y_label_help
+        else:
+            y_label = y_label_help
 
-    fig, ax = plt.subplots(2, columns, layout='constrained', figsize=(12, 10), sharex='col', sharey='row')
+    fig, ax = plt.subplots(2, columns, layout='constrained', figsize=(12, 10), sharex='col', sharey=True)
+    if rates == '':
+        ax00 = ax[0][0].twinx()
+        ax01 = ax[1][0].twinx()
+        if columns == 2:
+            ax02 = ax[0][1].twinx()
+            ax03 = ax[1][1].twinx()
+
     
     for i in range(2):
         for j in range(columns):
-            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor, 'r', label='erosion')
-            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (deposition[erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor, 'b', label='deposition')
-            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + deposition[erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor,'k', label='net erosion')
-            ax[i][j].legend()
             ax[i][j].axhline(0, color='grey')
-            ax[i][j].set_ylabel(y_label[i][j])
+            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], 'r', label='erosion')
+            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (deposition[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], 'b', label='deposition')
+            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + deposition[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0],'k', label='net erosion')
+            ax[i][j].legend()
+            ax[i][j].set_ylabel(y_label[0][i][j])
+            #ax[i][j].tick_params(axis="y", labelcolor='black')
+
+            if rates == '':
+                if i == 0 and j == 0:
+                    ax1 = ax00
+                elif i == 0 and j == 1:
+                    ax1 = ax02
+                elif i == 1 and j == 0:
+                    ax1 = ax01
+                elif i == 1 and j == 1:
+                    ax1 = ax03
+
+                ax1.plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[1], 'r:', label='erosion')
+                ax1.plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (deposition[1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[1], 'b:', label='deposition')
+                ax1.plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + deposition[1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[1],'k:', label='net erosion')
+                ax1.legend()
+                ax1.set_ylabel(y_label[1][i][j])
+                #ax1.tick_params(axis="y", labelcolor='black')
+                
 
             ax[1][j].set_xlabel('distance from pumping gap (m)')
+
+    if rates == '':
+        ax00.sharey(ax01)
+        if columns == 2:
+            ax02.sharey(ax03)
+            min, max = ax00.get_ylim()
+            ax02.set_ylim(min, max)
+        fig.autofmt_xdate()
+
     if safe == '':
         safe = 'results/erosionFullCampaign/{campaign}_{Ts}_totalErosion{rates}_{config}{iota}{extrapolated}.png'.format(campaign=campaign, Ts=T_default, rates=rates, iota='_'+iota+'Iota_', config=configuration, extrapolated=extrapolated)
     fig.savefig(safe, bbox_inches='tight')
     plt.show()
     plt.close()
 
+#######################################################################################################################################################################        
 def appendY(Y_H: list[int|float], Y_C: list[int|float], Y_O: list[int|float], erosionRate: list[int|float], depositionRate: list[int|float], 
             Te: int|float, Ts: int|float, ne: int|float, timestep: int|float, alpha: int|float, zeta: int|float, 
             m_i: list[int|float], f_i: list[int|float], ions: list[str], k: int|float, n_target: int|float) -> list[list[int|float]]:
@@ -177,6 +234,97 @@ def averageValues(varyingQuantity: str, neList: list[int|float], TeList: list[in
 
     return ne, Te, Ts, alpha, zeta
 
+#######################################################################################################################################################################        
+def plotSputteringYieldsInDependence(ne: int|float, Te: int|float, Ts: int|float, alpha: int|float, zeta: int|float, 
+                                     m_i: list[int|float], f_i: list[int|float], ions: list[str], k: int|float, n_target: int|float,
+                                     safe: str ='results/parameterStudies/sputteringYields.png') -> None:
+    
+    Y_chem = []
+    Y_phys = []
+
+    for m, f, ion in zip(m_i, f_i, ions):
+        if ion == 'C':
+            q = 2
+        elif ion == 'O':
+            q = 3
+        else:
+            q = 1
+        energies = np.linspace(3 * Te * q, 1e+5, 1000)
+        flux = calc.calculateFluxIncidentIon(zeta, Te, Te, m, ne, f)
+        
+        Y_ion_chem = []
+        Y_ion_phys = []
+        for E in energies:
+            if ion == 'C':
+                Y_ion_chem.append(0)
+                Y_ion_phys.append(calc.calculatePhysicalSputteringYieldEckstein(E, alpha))
+            elif ion == 'O':
+                Y_ion_chem.append(0.7)
+                Y_ion_phys.append(calc.calculatePhysicalSputteringYield('C', ion, E, alpha, n_target))
+            else:
+                Y_ion_chem.append(calc.calculateChemicalErosionYieldRoth(ion, E, Ts, flux))
+                Y_ion_phys.append(calc.calculatePhysicalSputteringYield('C', ion, E, alpha, n_target))
+            
+
+        Y_chem.append(Y_ion_chem)
+        Y_phys.append(Y_ion_phys)
+
+    Y = [np.array(Y_phys), np.array(Y_chem), np.array(Y_phys) + np.array(Y_chem)]
+    fig, ax = plt.subplots(3, 1, layout='constrained', figsize=(12, 15), sharex=True)
+    for i, Y_type in enumerate(Y):
+        for ion, Y_ion in zip(ions, Y_type):
+            ax[i].plot(energies, Y_ion, label=ion)
+    
+    ax[0].set_ylabel('Physical sputtering yield')
+    ax[1].set_ylabel('Chemical sputtering yield')
+    ax[2].set_ylabel('Total sputtering yield')
+
+    for i in range(3):
+        ax[i].set_xlabel('Energy in eV')
+        ax[i].legend()
+        ax[i].grid(True, which="both")
+        ax[i].set_yscale('log')
+        ax[i].set_xscale('log')
+    
+    plt.figtext(0.5, 1.01, '$n_e$ = {ne} 1/m$^3$, $T_e$ = {Te} eV, $T_s$ = {Ts} K, $\\alpha$ = {alpha:.3f} rad, $\zeta$ = {zeta:.3f} rad\n$f_H$ = {H}, $f_C$ = {C}, $f_O$ = {O}'.format(ne=ne, Te=Te, Ts=Ts, alpha=alpha, zeta=zeta, H=f_i[0], C=f_i[3], O=f_i[4]), horizontalalignment='center')
+    fig.savefig(safe, bbox_inches='tight')
+    fig.show()
+    plt.close()
+
+#######################################################################################################################################################################        
+def plotEnergyDistribution(Te: int|float, ions: list[str],
+                           safe: str ='results/parameterStudies/energyDistribution.png') -> None:
+    fig, ax = plt.subplots(1, 1, layout='constrained', figsize=(10, 8), sharex=True)
+
+    for ion in ions:
+        if ion == 'C':
+            q = 2
+        elif ion == 'O':
+            q = 3
+        else:
+            q = 1
+        energies = np.linspace(3 * Te * q, 1e+5, 1000)
+        energyDist = [calc.energyDistributionIons(x, Te, q) for x in energies]        
+        
+        import scipy.integrate as integrate
+        IntegralFunction = lambda E: calc.energyDistributionIons(E, Te, q)
+        IntegralResult = integrate.quad(IntegralFunction, 3 * Te * q, np.inf)
+        print(IntegralResult[0])
+        ax.plot(energies, energyDist, label='ion')
+    
+        ax.set_ylabel('Probability')
+        ax.set_xlabel('Energy in eV')
+        ax.legend()
+        ax.grid('minor')
+        ax.set_yscale('log')
+        ax.set_xscale('log')
+    
+    plt.figtext(0.5, 1.01, '$T_e$ = {Te} eV'.format(Te=Te), horizontalalignment='center')
+    fig.savefig(safe, bbox_inches='tight')
+    fig.show()
+    plt.close()
+
+#######################################################################################################################################################################        
 def parameterStudy(neList: list[int|float], TeList: list[int|float], TsList: list[int|float], alphaList: list[int|float], zetaList: list[int|float], 
                    m_i: list[int|float], f_i: list[int|float], ions: list[str], k: int|float, n_target: int|float,
                    timestep: list[int|float] =[50000], safe: str ='results/parameterStudies/overviewPlot.png') -> None:

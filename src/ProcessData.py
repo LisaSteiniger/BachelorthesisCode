@@ -10,6 +10,39 @@ import scipy.constants
 import src.SputteringYieldFunctions as calc
 #import src.ReadArchieveDB as read
 import src.PlotData as plot
+from src.settings import k
+
+#######################################################################################################################################################################
+def subresults(m_i: list[int|float], f_i: list[int|float], ions: list[str], ne: int|float =1e+19, Te: int|float =15, Ts: int|float =320, alpha: int|float =np.deg2rad(40), zeta: int|float =np.deg2rad(2), n_C: int|float =9.5*1e+28, t: int|float =15) -> None:
+    ''' This function prints out the subresults of the calculation prozess for one parameter set ne (electron density), Te (electron temperature), Ts (surface temperature), alpha (ion incidence angle), zeta (mag. filed line incident angle), n_C (atomic target density), t (duration of discharge)
+        Subresults include flux densities, physical and chemical sputtering yields, erosion and deposition layer thicknesses and net eroded layer thickness of all ions
+        For all ions, their masses "m_i" in (kg), their concentrations "f_i" and names/chemical symbols "ions" must be given
+        ne and n_C in (m^-3), Te in (eV), Ts in (K), alpha and zeta in (rad), t in (s)'''
+    total = 0
+    for mi, fi, ion in zip(m_i, f_i, ions):
+        flux = calc.calculateFluxIncidentIon(zeta, Te/k, Te/k, mi, ne, fi)
+        print(f'flux density (1/m^2 s) for {ion}: ', flux)
+
+        Ys = calc.calculateTotalErosionYield(ion, Te, 'C', alpha, Ts, flux, n_C, True)
+        print(f'Physical sputtering yield for {ion}: ', Ys[0])
+        print(f'Chemical erosion yield for {ion}: ', Ys[1])
+
+        erosion = t * flux * (Ys[0] + Ys[1])/n_C
+        print(f'Eroded layer thickness (m) for {ion}: ', erosion)
+        
+        if ion == 'C':
+            deposition = t * flux/n_C
+        else:
+            deposition = 0
+        print(f'Deposited layer thickness (m) for {ion}: ', deposition)
+
+        print(f'Net eroded layer thickness (m) for {ion}: ', deposition - erosion)
+
+        total += deposition - erosion
+        
+        print()
+
+    print(f'Total net eroded layer thickness (m) for all ions: ', total)
 
 #######################################################################################################################################################################
 def calculateErosionRelatedQuantitiesOnePosition(T_e: list[int|float], 
@@ -546,7 +579,8 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(config: str,
                                                         n_target: int|float, 
                                                         defaultValues: list[int|float] =[np.nan, np.nan, 320], 
                                                         intrapolated: bool =False, 
-                                                        plotting: bool =False) -> pd.DataFrame:
+                                                        plotting: bool =False,
+                                                        excluded: list[str] =[]) -> pd.DataFrame:
     ''' This function calculates total erosion/deposition layer thickness for all LPs of all discharges of configuration "config" given by their IDs "discharges" with their durations "durations" in [s]
         -> adding erosion layer thickness up to last LP measurement to erosion layer thickness from last LP measurement to end of discharge and sum them up for all discharges of the configuration
         "overviewTables" is list of links following this structure 'results/calculationTables/results_{discharge}.csv'.format(discharge=discharge)
@@ -561,7 +595,8 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(config: str,
         -> give them in [1/m^3, eV, K] (as Ts does not have too much of an influence, setting a constant default value makes sense and does not affect the results reliability too much)
         The parameter "plotting" determines, if measurement data, sputtering yields and erosion/deposition rates/layer thicknesses are plotted
         -> if True, plots are saved in safe = 'results/plots/overview_{exp}-{discharge}_{divertorUnit}{position}.png'.format(exp=discharge[:-4], discharge=discharge[-3:], divertorUnit=divertorUnit, position=position) 
-         
+        "excluded" is a list of discharges that should not be taken into account
+
         Returns pd.DataFrame that is also saved as .csv file under 'results/erosionMeasuredConfig/totalErosionAtPosition_{config}.csv'.format(config=config)
         -> lists total erosion and deposition layer thicknesses for each discharge (with any data available) at each position
         -> holds keys like 'discharge', 'duration', 'lower0_erosion', 'lower0_deposition' '''
@@ -570,6 +605,16 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(config: str,
     dischargeList, durationList = [], []
     for discharge, duration, overviewTable in zip(discharges, durations, overviewTables):
         discharge = str(discharge)
+
+        if discharge[-2] == '.':
+            discharge = discharge + '00'
+        elif discharge[-3] == '.':
+            discharge = discharge + '0'
+
+        if discharge in excluded:
+            print(discharge)
+            continue
+        
         lower = [False] * 18
         upper = [False] * 18
  
@@ -580,9 +625,9 @@ def calculateTotalErodedLayerThicknessSeveralDischarges(config: str,
         dischargeList.append(discharge)
         durationList.append(duration)
 
-        if not intrapolated:
+        if not intrapolated or discharge.endswith('0'):
             overviewTable = pd.read_csv(overviewTable, sep=';')
-            erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, LP_zeta, m_i, f_i, ions, k, n_target, defaultValues, intrapolated, plotting)
+            erosion = calculateTotalErodedLayerThicknessOneDischarge(discharge, duration, overviewTable, alpha, LP_zeta, m_i, f_i, ions, k, n_target, defaultValues, False, plotting)
         else:
             if not os.path.isfile('results/calculationTablesNew/' + overviewTable.split('/')[-1]):
                 overviewTable = pd.read_csv(overviewTable, sep=';')
@@ -958,8 +1003,8 @@ def calculateTotalErodedLayerThicknessWholeCampaign(n_target: int|float,
 
     erosion_rate = erosion_position/duration_ero    
     deposition_rate = deposition_position/duration_depo    
-    print(erosion_rate)    
-    print(deposition_rate)   
+    #print(erosion_rate)    
+    #print(deposition_rate)   
 
     #plot low iota, not extrapolated
     plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, '', configurationChosen, campaign, T_default)
@@ -1160,28 +1205,34 @@ def calculateTotalErodedLayerThicknessWholeCampaign(n_target: int|float,
 
 ##################################################################################################################################################################
 def approximationErodedMaterialMassWholeCampaign(LP_position: list[int|float], erosion: list[int|float], deposition: list[int|float], n_target: int|float, M_target: int|float =12.011) -> float:
+    ''' returns the mass of net eroded/deposited (</> 0) target material in g'''
     LP_position = list(itertools.chain.from_iterable([LP_position, LP_position]))
     indices = [0, 14, 18, 32, 36]
-    volume = 0
+    volume, volumeEro, volumeDep = 0, 0, 0
     for i in [0, 2]:#for i in range(len(indices) - 1):
-        crossSection = 0
+        crossSection, crossSectionEro, crossSectionDep = 0, 0, 0
         for j in range(indices[i], indices[i + 1] - 1):
             delta_x = LP_position[j + 1] - LP_position[j]
-            erosion_av = (erosion[j + 1] - erosion[j])/2
-            deposition_av = (deposition[j + 1] - deposition[j])/2
-            crossSection += delta_x * (erosion_av - deposition_av) 
-        volume += crossSection * 0.5 * 1/(LP_position[indices[i + 1] - 1] - LP_position[indices[i]])
-    return n_target * M_target * volume/scipy.constants.N_A
+            erosion_av = (erosion[j + 1] + erosion[j])/2
+            deposition_av = (deposition[j + 1] + deposition[j])/2
+            crossSectionEro += delta_x * erosion_av 
+            crossSectionDep += delta_x * deposition_av
+            crossSection += delta_x * (- erosion_av + deposition_av) 
+        volumeEro += crossSectionEro * 0.5 * 1/(0.1)#0.1m is width of strike line, 1m^2 is the area occupied by the strikeline
+        volumeDep += crossSectionDep * 0.5 * 1/(0.1)#0.1m is width of strike line, 1m^2 is the area occupied by the strikeline
+        volume += crossSection * 0.5 * 1/(0.1)#0.1 is width of strike line, 1 is the area occupied by the strikeline
+    return [n_target * M_target * volume/scipy.constants.N_A, n_target * M_target * volumeEro/scipy.constants.N_A, n_target * M_target * volumeDep/scipy.constants.N_A] #equivalent to rho * V
 
 ##################################################################################################################################################################
 def calculateAverageQuantityPerConfiguration(quantity: str,
                                              config: str, 
                                              LP_position: list[int|float], 
                                              campaign: str ='',
-                                             dischargeList: str ='results/configurations/dischargeList_') -> str|None:
+                                             dischargeList: str ='results/configurations/dischargeList_', 
+                                             excluded :list[str] = []) -> str|None:
     ''' This function calculates the average value for one of the quantities ne, Te, or Ts (="quantity") for one configuration "config"
         -> at all Langmuir Probe positions given in "LP_position"
-        -> for all discharges in "config" and in "campaign" given in "dischargeList"'''
+        -> for all discharges in "config" and in "campaign" given in "dischargeList" but not in "excluded"'''
     if campaign == '':
         campaign = 'OP223'
 
@@ -1193,6 +1244,14 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
     timeConfiguration = np.array([0.]*36)
     for discharge, duration, overviewTable in zip(dischargeOverview['dischargeID'], dischargeOverview['duration'], dischargeOverview['overviewTable']):
         discharge = str(discharge)
+
+        if discharge[-2] == '.':
+            discharge = discharge + '00'
+        elif discharge[-3] == '.':
+            discharge = discharge + '0'
+
+        if discharge in excluded:
+            continue
  
         if os.path.isfile('results/calculationTablesNew/' + overviewTable.split('/')[-1]):
             overviewTable = pd.read_csv('results/calculationTablesNew/' + overviewTable.split('/')[-1], sep = ';')
@@ -1301,12 +1360,15 @@ def frameCalculateAverageQuantityPerConfiguration(quantities: list[str],
                                                   campaigns: list[str], 
                                                   configurations: list[str], 
                                                   LP_position: list[int|float],
-                                                  config_short: bool|str =False) -> None: 
+                                                  config_short: bool|str =False, 
+                                                  excluded: list[str] =[]) -> None: 
     ''' This function is the frame work for calculateAverageQuantityPerConfiguration
         It determines the average value of each quantity given in "quantities" (ne, Te, Ts) at each Langmuir Probe position given by "LP_position"
         -> for each configuration given in "configurations" (if file with discharges exists) and matching "config_short"
         -> "config_short can be False, then the average of all configurations is determined, or e.g. 'EIM', then only EIM... configurations are considered for the total average
-        -> distinguishes between "campaigns" 'OP22', 'OP23', and '' meaning both campaigns'''       
+        -> distinguishes between "campaigns" 'OP22', 'OP23', and '' meaning both campaigns
+        "excluded" is a list of discharges that should be excluded from averaging'''       
+    averageReturn = []
     for quantity in quantities:
         for campaign in campaigns:
             averageCampaign = np.array([0.] * 36)
@@ -1322,7 +1384,7 @@ def frameCalculateAverageQuantityPerConfiguration(quantities: list[str],
                 else:
                     configChosen = ''
 
-                resultAverage = calculateAverageQuantityPerConfiguration(quantity, config, LP_position, campaign)
+                resultAverage = calculateAverageQuantityPerConfiguration(quantity, config, LP_position, campaign, excluded=excluded)
                 if type(resultAverage) == str:
                     print(resultAverage)
                 else:  
@@ -1346,18 +1408,26 @@ def frameCalculateAverageQuantityPerConfiguration(quantities: list[str],
             plt.show()
             plt.close()
 
-            print(averageCampaign)
+            averageReturn.append(averageCampaign)
+
+    return averageReturn
 
 ############################################################################################################################
 def approximationOfLayerThicknessesBasedOnAverageParameterValues(LP_position: list[int|float], campaign: str,
-                                                                 alpha: int|float, zeta: list[int|float], m_i: list[int|float], f_i: list[int|float], ions: list[str], k: int|float, n_target: int|float) -> None: 
-    if campaign == 'OP2.2': 
+                                                                 alpha: int|float, zeta: list[int|float], m_i: list[int|float], f_i: list[int|float], ions: list[str], k: int|float, n_target: int|float,
+                                                                 importAverages: bool|str, configuration: str ='all') -> int|float: 
+    ''' This function calculates the expectable erosion/deposition of the divertor for a set of average parameter values + input parameters
+        ne, Te, Ts averages at each Langmuir Probe Position ("LP_position") on lower and upper divertor unit for each campaign (and configuration if provided)
+        -> input parameters (second line of parameters)
+        "importAverages" indicates, that average ne, Te, Ts are used as defined below (for False) or read from a .csv file (for str=file path)
+        returns mass of net eroded material in g'''
+    if campaign == 'OP22': 
         ne = [8.10861120e+18, 9.23699360e+18, 5.39394510e+18, 4.88005878e+18, 6.41963593e+19, 7.53689257e+18, 3.74975667e+18, 2.87621473e+18, 1.86239725e+18, 1.77501141e+18, 1.24395721e+18, 8.16433709e+17, 7.98950114e+17, 2.63917556e+18, 6.71595628e+18, 6.02079381e+18, 6.96774702e+18, 8.67705959e+18, 7.34334178e+18, 6.82833426e+18, 3.96166626e+18, 3.27682856e+18, 3.05768770e+18, 2.92846510e+18, 2.13915956e+18, 1.78086238e+18, 5.61754825e+19, 2.76740351e+18, 3.49056208e+18, 1.00981278e+18, 9.08946107e+17, 1.89625133e+19, 4.69150909e+18, 5.29825547e+18, 8.07835520e+18, 7.49023570e+18]
         Te = [23.10917898, 23.97398849, 17.24971306, 12.9683621, 16.1148856, 15.14815498, 11.83223752, 11.13380081, 10.22305666, 8.8592773, 7.93170485, 6.82595981, 6.60610872, 4.80160941, 17.62515757, 16.13908412, 25.78049094, 20.23960462, 22.49694823, 23.95433543, 20.73571079, 16.05200695, 16.11300381, 15.77758246, 10.83166445, 9.89855224, 10.14166381, 7.22341548, 8.01914169, 6.33356499, 11.30071018, 4.04176992, 9.98670479, 11.42823382, 17.45413223, 25.34487122]
         Ts = [348.53123333, 339.57542575, 327.58684535, 322.48441638, 320.37366489, 320.53570604, 316.64689784, 314.81928323, 313.70052689, 312.70113155, 312.37350838, 312.15832773, 311.93336754, 312.42157821, 333.43560488, 371.92962704, 433.55672356, 435.60782705, 357.57614827, 351.53122556, 336.32154333, 326.37350381, 323.99850832, 321.41492792, 316.27895614, 315.81451817, 314.67173041, 313.93423271, 312.82564765, 312.18334915, 312.06617817, 313.87187357, 379.7223462, 333.73038846, 357.42425781, 398.05262984]
         t = 20372.65
 
-    elif campaign == 'OP2.3':
+    elif campaign == 'OP23':
         ne = [7.23425072e+18, 6.49082692e+18, 4.74422826e+18, 4.13011762e+18, 1.00974487e+19, 4.06601437e+18, 4.58674313e+18, 3.35729073e+18, 1.63927672e+18, 2.32379908e+18, 1.83177974e+18, 1.51632845e+18, 5.19738099e+17, 9.77853187e+17, np.nan , np.nan , 3.99357880e+18, np.nan , 8.19180641e+18, 8.43372562e+18, 2.26185620e+18, 2.21738383e+18, 1.88094868e+18, 1.87003597e+18, 4.06435840e+18, 3.09974771e+18, 4.07980777e+18, 1.88866226e+18, 1.50819279e+18, 1.52277035e+18, 9.89528048e+17, 2.13408464e+18, 4.46755927e+18, 5.46513067e+18, 6.51305893e+18, 7.82164729e+18]
         Te = [22.01761885, 22.46042915, 16.40248943, 14.18213774, 17.20604823, 16.68423172, 12.41207622, 12.30609299, 14.7635153, 10.55438673, 10.20832988, 10.06609525, 26.80995318, 17.61596149, np.nan , np.nan , 29.90268815, np.nan , 22.29111767, 23.60803396, 21.16374238, 15.52334095, 15.09640528, 15.98598422, 13.43930376, 13.32485776, 13.91981687, 13.66644289, 10.7030418, 11.5603852, 30.29936855, 18.54352217, 9.81694099, 13.86485593, 18.71589961, 19.61945445]
         Ts = [344.02238096, 331.31824545, 321.68943264, 318.01602097, 317.16175369, 318.8853121, 315.30428473, 313.76628092, 312.89937246, 311.64312308, 311.17382574, 310.84767811, 311.19797395, 311.8039927, np.nan , np.nan , 377.54746229, np.nan , 340.8332816, 341.27643279, 333.74961652, 322.96430675, 319.93706882, 318.74008531, 315.99218539, 315.65745321, 314.32493327, 312.87997257, 312.18616397, 311.9843921, 312.43478398, 314.37532688, 350.47602205, 354.20017493, 370.1831045, 386.89669786]
@@ -1370,6 +1440,13 @@ def approximationOfLayerThicknessesBasedOnAverageParameterValues(LP_position: li
         t = 48705.89
         campaign = 'OP223'
 
+    if type(importAverages) == str:
+        if os.path.isfile(importAverages):
+            averageFrame = pd.read_csv(importAverages, sep=';')
+            ne = averageFrame[campaign + configuration + 'ne']
+            Te = averageFrame[campaign + configuration + 'Te']
+            Ts = averageFrame[campaign + configuration + 'Ts']
+    ####!!!t must be different for configuration != 'all'!!!###
     zeta = list(itertools.chain.from_iterable([zeta, zeta]))
 
     erosion, deposition = [], []
@@ -1381,7 +1458,13 @@ def approximationOfLayerThicknessesBasedOnAverageParameterValues(LP_position: li
     erosion = np.array(list(itertools.chain.from_iterable(erosion)))
     deposition = np.array(list(itertools.chain.from_iterable(deposition)))
 
-    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, '', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_LowIota_LowerDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
+    if configuration == 'all':
+        configuration = ''
+    plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, '', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}{config}AverageAllPositions_alpha{alpha:.3f}_fi{f_i}.png'.format(campaign=campaign, config=configuration, alpha=alpha, f_i=f_i))
     #plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'low', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_LowIota_UpperDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
     #plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'high', 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_HighIota_LowerDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
     #plot.plotTotalErodedLayerThickness(LP_position, erosion, deposition, 'high' 'all', campaign, '', '', False, 'results/averageQuantities/{campaign}AverageAllPositions_HighIota_UpperDU_alpha{alpha:3f}_fi{f_i}.png'.format(campaign=campaign, alpha=alpha, f_i=f_i))
+   
+    mass = approximationErodedMaterialMassWholeCampaign(LP_position, erosion, deposition, n_target)
+    
+    return mass

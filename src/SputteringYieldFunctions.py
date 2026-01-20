@@ -317,10 +317,11 @@ def energyDistributionIons(E: int|float =2, T_i: int|float =1, q: int=1):
 
 #######################################################################################################################################################################
 def calculateTotalErosionYield(incidentParticle: str, T_i: int|float, targetMaterial: str ='C', alpha: int|float =np.pi/4, T_s: int|float =600, 
-                               flux: int|float =1e22, n_target: int|float =9.526*1e28) -> float:
+                               flux: int|float =1e22, n_target: int|float =9.526*1e28, subyields: bool =False) -> float:
     ''' This function calculates the total erosion yield caused by on incident ion species "incidentParticle" on the target made from "targetMaterial"
         Ion temperature "T_i" is given in [eV], incident angle "alpha" of that ion is given in [rad], "T_s" is the surface temperature of the target in [K]
         ion flux density "flux" in [ions/(s m^2)], atomic target density "n_target" in [1/m^3]
+        "subyields" means that Y_phys and Y_chem are returned separately if 'True' 
         Returns single value for sputtering yield [unitless]'''       
     #as all ion energies should be considered but with appropriate weighting factor, integral (over all applying energies) of erosion yield times energy distribution is chosen
     if T_s != 0:
@@ -330,22 +331,58 @@ def calculateTotalErosionYield(incidentParticle: str, T_i: int|float, targetMate
             q_i = 3
         else:
             q_i = 1
-        def Integral(incidentParticle: str, E: int|float, T_i: int|float, targetMaterial: str ='C', alpha: int|float =np.pi/4, T_s: int|float =600, 
-                     flux: int|float =1e22, n_target: int|float =9.526*1e28):
-            if incidentParticle=="H":
-                Y = calculatePhysicalSputteringYield(targetMaterial, 'H', E, alpha, n_target) + calculateChemicalErosionYieldRoth('H', E, T_s, flux)#+ calculateChemicalErosionYield('H', E, T_s, flux)
-            elif incidentParticle=="D":
-                Y = calculatePhysicalSputteringYield(targetMaterial, 'D', E, alpha, n_target) + calculateChemicalErosionYieldRoth('D', E, T_s, flux)
-            elif incidentParticle=="T":
-                Y = calculatePhysicalSputteringYield(targetMaterial, 'T', E, alpha, n_target) + calculateChemicalErosionYieldRoth('T', E, T_s, flux)
-            elif incidentParticle=="O":
-                Y = calculatePhysicalSputteringYield(targetMaterial, 'O', E, alpha, n_target) + 0.7 #0.7 is literature value for chem erosion of O on C
-            elif incidentParticle=="C":
-                Y = calculatePhysicalSputteringYieldEckstein(E, alpha)   
-            return energyDistributionIons(E, T_i, q_i) * Y
-        IntegralFunction = lambda E: Integral(incidentParticle, E, T_i, targetMaterial, alpha, T_s, flux, n_target)
-        IntegralResult = integrate.quad(IntegralFunction, 3 * T_i * q_i, np.inf)
-        return IntegralResult[0]
+        if not subyields:
+            def Integral(incidentParticle: str, E: int|float, T_i: int|float, targetMaterial: str ='C', alpha: int|float =np.pi/4, T_s: int|float =600, 
+                        flux: int|float =1e22, n_target: int|float =9.526*1e28):
+                if incidentParticle=="H":
+                    Y = calculatePhysicalSputteringYield(targetMaterial, 'H', E, alpha, n_target) + calculateChemicalErosionYieldRoth('H', E, T_s, flux)#+ calculateChemicalErosionYield('H', E, T_s, flux)
+                elif incidentParticle=="D":
+                    Y = calculatePhysicalSputteringYield(targetMaterial, 'D', E, alpha, n_target) + calculateChemicalErosionYieldRoth('D', E, T_s, flux)
+                elif incidentParticle=="T":
+                    Y = calculatePhysicalSputteringYield(targetMaterial, 'T', E, alpha, n_target) + calculateChemicalErosionYieldRoth('T', E, T_s, flux)
+                elif incidentParticle=="O":
+                    Y = calculatePhysicalSputteringYield(targetMaterial, 'O', E, alpha, n_target) + 0.7 #0.7 is literature value for chem erosion of O on C
+                elif incidentParticle=="C":
+                    Y = calculatePhysicalSputteringYieldEckstein(E, alpha)   
+                return energyDistributionIons(E, T_i, q_i) * Y
+            IntegralFunction = lambda E: Integral(incidentParticle, E, T_i, targetMaterial, alpha, T_s, flux, n_target)
+            IntegralResult = integrate.quad(IntegralFunction, 3 * T_i * q_i, np.inf)
+            return IntegralResult[0]
+
+        else:
+            def IntegralPhys(incidentParticle: str, E: int|float, T_i: int|float, targetMaterial: str ='C', alpha: int|float =np.pi/4, T_s: int|float =600, 
+                        flux: int|float =1e22, n_target: int|float =9.526*1e28):
+                if incidentParticle=="H":
+                    Y = [calculatePhysicalSputteringYield(targetMaterial, 'H', E, alpha, n_target), calculateChemicalErosionYieldRoth('H', E, T_s, flux)]#+ calculateChemicalErosionYield('H', E, T_s, flux)
+                elif incidentParticle=="D":
+                    Y = [calculatePhysicalSputteringYield(targetMaterial, 'D', E, alpha, n_target), calculateChemicalErosionYieldRoth('D', E, T_s, flux)]
+                elif incidentParticle=="T":
+                    Y = [calculatePhysicalSputteringYield(targetMaterial, 'T', E, alpha, n_target), calculateChemicalErosionYieldRoth('T', E, T_s, flux)]
+                elif incidentParticle=="O":
+                    Y = [calculatePhysicalSputteringYield(targetMaterial, 'O', E, alpha, n_target), 0.7] #0.7 is literature value for chem erosion of O on C
+                elif incidentParticle=="C":
+                    Y = [calculatePhysicalSputteringYieldEckstein(E, alpha), 0]   
+                return energyDistributionIons(E, T_i, q_i) * Y[0]
+            
+            def IntegralChem(incidentParticle: str, E: int|float, T_i: int|float, targetMaterial: str ='C', alpha: int|float =np.pi/4, T_s: int|float =600, 
+                        flux: int|float =1e22, n_target: int|float =9.526*1e28):
+                if incidentParticle=="H":
+                    Y = [calculatePhysicalSputteringYield(targetMaterial, 'H', E, alpha, n_target), calculateChemicalErosionYieldRoth('H', E, T_s, flux)]#+ calculateChemicalErosionYield('H', E, T_s, flux)
+                elif incidentParticle=="D":
+                    Y = [calculatePhysicalSputteringYield(targetMaterial, 'D', E, alpha, n_target), calculateChemicalErosionYieldRoth('D', E, T_s, flux)]
+                elif incidentParticle=="T":
+                    Y = [calculatePhysicalSputteringYield(targetMaterial, 'T', E, alpha, n_target), calculateChemicalErosionYieldRoth('T', E, T_s, flux)]
+                elif incidentParticle=="O":
+                    Y = [calculatePhysicalSputteringYield(targetMaterial, 'O', E, alpha, n_target), 0.7] #0.7 is literature value for chem erosion of O on C
+                elif incidentParticle=="C":
+                    Y = [calculatePhysicalSputteringYieldEckstein(E, alpha), 0]   
+                return energyDistributionIons(E, T_i, q_i) * Y[1]
+        
+            IntegralFunctionPhys = lambda E: IntegralPhys(incidentParticle, E, T_i, targetMaterial, alpha, T_s, flux, n_target)
+            IntegralFunctionChem = lambda E: IntegralChem(incidentParticle, E, T_i, targetMaterial, alpha, T_s, flux, n_target)
+            IntegralResultPhys = integrate.quad(IntegralFunctionPhys, 3 * T_i * q_i, np.inf)
+            IntegralResultChem = integrate.quad(IntegralFunctionChem, 3 * T_i * q_i, np.inf)
+            return IntegralResultPhys[0], IntegralResultChem[0]
     else:
         return 0
     

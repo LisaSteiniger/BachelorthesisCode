@@ -9,6 +9,7 @@
     -> measured from the surface of the target towards the surface normal'''
 
 import numpy as np
+import pandas as pd
 
 OP1_ProbeTM3 = ['TE3-01', 'TE3-02', 'TE3-03', 'TE3-04', 'TE3-05', 'TE3-06', 'TE3-07', 'TE3-08', 'TE3-09', 'TE3-10']
 OP1_ProbeTM4 = ['TE4-11', 'TE4-12', 'TE4-13', 'TE4-14', 'TE4-15', 'TE4-16', 'TE4-17', 'TE4-18', 'TE4-19', 'TE4-20']
@@ -31,6 +32,7 @@ OP2_TM2xyz = [[2.52028, -4.64803, 0.99334],
               [2.4839,  -4.581,   0.98015],
               [2.47178, -4.55865, 0.97575],
               [2.45965, -4.53631, 0.97135]]
+OP2_TM2xyz.sort(key=lambda x: x[2])
 
 OP2_TM3xyz = [[2.64076, -4.88656, 1.03841],
               [2.62866, -4.86418, 1.03412],
@@ -40,6 +42,7 @@ OP2_TM3xyz = [[2.64076, -4.88656, 1.03841],
               [2.58026, -4.77467, 1.01696],
               [2.56816, -4.75229, 1.01267],
               [2.55605, -4.72991, 1.00838]]
+OP2_TM3xyz.sort(key=lambda x: x[2])
 
 OP2_TM8xyz = [[0.29669, -5.93902, 0.71571],
               [0.29528, -5.91356, 0.71573],
@@ -49,6 +52,35 @@ OP2_TM8xyz = [[0.29669, -5.93902, 0.71571],
 OP1_TM3zeta = [np.deg2rad(2.)] * len(OP1_ProbeTM3)
 OP1_TM4zeta = [np.deg2rad(2.)] * len(OP1_ProbeTM4)
 
-OP2_TM2zeta = list(map(np.deg2rad, [1.5, 1, 0.5, 0, 0, 0.5]))
-OP2_TM3zeta = list(map(np.deg2rad, [2, 2, 2.5, 2.5, 3, 3, 3.5, 4]))
-OP2_TM8zeta = [np.deg2rad(2.)] * len(OP2_TM8Distances)
+def readZeta(path: str, distances: list[int|float]) -> list[int|float]:
+    zeta = []
+    zetaTable = pd.read_csv(path, sep='\s+')#delim_whitespace=True)
+    
+    def getR(x: int|float, y: int|float, z: int|float) -> int|float:
+        return np.sqrt(x**2 + y**2 + z**2) 
+    
+    r0 = getR(zetaTable['x[mm]'][0], zetaTable['y[mm]'][0], zetaTable['z[mm]'][0])
+    for r in distances:
+        #indexX = np.argmin(np.array(list(map(lambda x, y: abs(x * np.cos(-2/5 * np.pi) + y * np.sin(-2/5 * np.pi) - 1000 * z[0]), zetaTable['x[mm]'], zetaTable['y[mm]'])))) #(z[0] * np.cos(-2/5 * np.pi) - z[1] * np.sin(-2/5 * np.pi))
+        #indexY = np.argmin(np.array(list(map(lambda x, y: abs((x * np.sin(-2/5 * np.pi) - y * np.cos(-2/5 * np.pi)) - 1000 * z[1] ), zetaTable['x[mm]'], zetaTable['y[mm]'])))) #(z[0] * np.sin(-2/5 * np.pi) - z[1] * np.cos(-2/5 * np.pi))
+        #indexZ = np.argmin(np.array(list(map(lambda x: abs(x/1000 - (- z[2])), zetaTable['z[mm]']))))
+        indexZ = np.argmin(np.array(list(map(lambda x, y, z: abs((getR(x, y, z) - r0)/1000 - r), zetaTable['x[mm]'], zetaTable['y[mm]'], zetaTable['z[mm]']))))
+
+        #zeta.append(abs(list(zetaTable['beta[deg]'])[indexX]))
+        #zeta.append(abs(list(zetaTable['beta[deg]'])[indexY]))
+        zeta.append(abs(list(zetaTable['beta[deg]'])[indexZ]))
+        
+    #print(zeta)
+    return zeta
+
+OP2_TM2zeta_lowIota = list(map(np.deg2rad, readZeta('inputFiles/zeta/angle_of_inc_TE_edge_2h_6_CONFIG_DBM000+2520.txt', OP2_TM2Distances)))
+OP2_TM3zeta_lowIota = list(map(np.deg2rad, readZeta('inputFiles/zeta/angle_of_inc_TE_edge_2h_6_CONFIG_DBM000+2520.txt', OP2_TM3Distances)))
+OP2_TM8zeta_lowIota = list(map(np.deg2rad, readZeta('inputFiles/zeta/angle_of_inc_TE_edge_8h_1_CONFIG_DBM000+2520.txt', OP2_TM8Distances)))
+
+OP2_TM2zeta_standardIota = list(map(np.deg2rad, readZeta('inputFiles/zeta/angle_of_inc_TE_edge_2h_6_CONFIG_EIM000+2520.txt', OP2_TM2Distances)))
+OP2_TM3zeta_standardIota = list(map(np.deg2rad, readZeta('inputFiles/zeta/angle_of_inc_TE_edge_2h_6_CONFIG_EIM000+2520.txt', OP2_TM3Distances)))
+OP2_TM8zeta_standardIota = list(map(np.deg2rad, readZeta('inputFiles/zeta/angle_of_inc_TE_edge_8h_1_CONFIG_EIM000+2520.txt', OP2_TM8Distances)))
+
+OP2_TM2zeta_highIota = list(map(np.deg2rad, readZeta('inputFiles/zeta/angle_of_inc_TE_edge_2h_6_CONFIG_FTM004+2520.txt', OP2_TM2Distances)))
+OP2_TM3zeta_highIota = list(map(np.deg2rad, readZeta('inputFiles/zeta/angle_of_inc_TE_edge_2h_6_CONFIG_FTM004+2520.txt', OP2_TM3Distances)))
+OP2_TM8zeta_highIota = list(map(np.deg2rad, readZeta('inputFiles/zeta/angle_of_inc_TE_edge_8h_1_CONFIG_FTM004+2520.txt', OP2_TM8Distances)))
