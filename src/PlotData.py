@@ -70,6 +70,7 @@ def plotOverview(n_e, T_e, T_s, Y_0, Y_3, Y_4, erosionRate_dt, erodedLayerThickn
 
 #######################################################################################################################################################################        
 def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[int|float|list[int|float]], deposition: list[int|float|list[int|float]],
+                                  erosionError: list[int|float], depositionError: list[int|float],
                                   iota: str, configuration: str, campaign: str, T_default: str, 
                                   extrapolated: bool = False, rates: bool|str =False, safe: str =''):
     ''' This function plots the erosion, deposition, and net erosion at different positions
@@ -103,7 +104,9 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
             rates = 'Layers'
 
         erosion = [erosion]
+        erosionError = [erosionError]
         deposition = [deposition]
+        depositionError = [depositionError]
 
     elif rates == 'both':
         rates = ''
@@ -155,9 +158,12 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
     for i in range(2):
         for j in range(columns):
             ax[i][j].axhline(0, color='grey')
-            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], 'r', label='erosion')
-            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (deposition[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], 'b', label='deposition')
-            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + deposition[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0],'k', label='net erosion')
+            ax[i][j].errorbar(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], yerr=erosionError[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]]*unitFactor[0], fmt='r-', label='erosion')
+#            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], 'r', label='erosion')
+            ax[i][j].errorbar(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (deposition[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], yerr=depositionError[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]]*unitFactor[0], fmt='b-', label='deposition')
+ #           ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (deposition[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], 'b', label='deposition')
+            ax[i][j].errorbar(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + deposition[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], yerr=(erosionError[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + depositionError[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], fmt='k-', label='net erosion')
+  #          ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + deposition[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0],'k', label='net erosion')
             ax[i][j].legend()
             ax[i][j].set_ylabel(y_label[0][i][j])
             #ax[i][j].tick_params(axis="y", labelcolor='black')
@@ -172,8 +178,8 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
                 elif i == 1 and j == 1:
                     ax1 = ax03
 
-                ax1.plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[1], 'r:', label='erosion')
-                ax1.plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (deposition[1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[1], 'b:', label='deposition')
+                ax1.errorbar(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[1], 'r:', label='erosion')
+                ax1.errorbar(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (deposition[1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[1], 'b:', label='deposition')
                 ax1.plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosion[1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + deposition[1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[1],'k:', label='net erosion')
                 ax1.legend()
                 ax1.set_ylabel(y_label[1][i][j])
@@ -197,6 +203,73 @@ def plotTotalErodedLayerThickness(LP_position: list[int|float], erosion: list[in
     plt.close()
 
 #######################################################################################################################################################################        
+#######################################################################################################################################################################        
+def plotComparisonErodedLayerThickness(LP_position: list[int|float], erosionList: list[list[int|float|list[int|float]]], depositionList: list[list[int|float|list[int|float]]],
+                                  erosionErrorList: list[list[int|float]], depositionErrorList: list[list[int|float]],
+                                  preferred: int, configuration: str, campaign: str, T_default: str, 
+                                  extrapolated: bool = False, rates: bool =False, safe: str =''):
+    ''' This function plots the erosion, deposition, and net erosion at different positions
+        positions are given by the installation locations of Langmuir probes given in "LP_position"
+        -> depending on "iota" the corresponding locations are chosen from that list 
+        -> iota 'low' = LPs on TM2h and TM3h (index 0-13), while 'high' = LPs on TM8h (index 14-17), increasing index = increasing distance from pumping gap
+        "erosion" and "deposition" are lists containing the accumulated layer thickness that has been eroded/deposited in one campaign by discharges in a certain configuration
+        -> they provide values for all 18 LPs of both divertor units
+        -> sorted the same way as LP_position, first lower DU low iota, then lower DU high iota, upper DU low and high iota
+        -> "campaign" is either 'OP22', 'OP23', '' (both campaigns), "configuration" the configuration being looked at 
+        "T_default" adds information on the treatment of missing surface temperature values (e.g. set to 320K)
+        "extrapolated" determines if layer thicknesses are purely from measurement data (False) or have been extrapolated for missing measurement values (True)
+        "rates" determines if layer thicknesses or erosion/deposition rates or both ('both') are plotted
+        "safe" is where to safe the figure'''
+    if configuration == 'all':
+        configuration = 'wholeCampaign'
+    
+    if extrapolated:
+        extrapolated = 'extrapolated'
+    else:
+        extrapolated = ''
+
+    if rates:
+        unitFactor = [1e+9]
+        y_label = [[['erosion/deposition rates lower divertor unit in (nm/s)'], ['erosion/deposition rates upper divertor unit in (nm/s)']]]
+        rates = 'Rates'
+    else: 
+        unitFactor = [1e+3]
+        y_label = [[['total layer thickness lower divertor unit in (mm)'], ['total layer thickness upper divertor unit in (mm)']]]
+        rates = 'Layers'
+
+    LP_startIndex = [0, 14]
+    LP_stopIndex = [14, 18]
+    erosion_startIndex = [[0, 14], [18, 32]]
+    erosion_stopIndex = [[14, 18], [32, 36]]
+    columns = 2
+    y_label = [[['Low iota: ' + y_label[0][0][0], 'High iota: ' + y_label[0][0][0]], 
+                ['Low iota: layers ' + y_label[0][1][0], 'High iota: ' + y_label[0][1][0]]]]
+
+    fig, ax = plt.subplots(2, columns, layout='constrained', figsize=(12, 10), sharex='col', sharey=True)
+
+
+    for i in range(2):
+        for j in range(columns):
+            ax[i][j].axhline(0, color='grey')
+            ax[i][j].errorbar(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosionList[preferred][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + depositionList[preferred][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], yerr=(erosionErrorList[preferred][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + depositionErrorList[preferred][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], fmt='k-', label='net erosion')
+            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosionList[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + depositionList[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], color='grey')
+            ax[i][j].plot(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosionList[-1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + depositionList[-1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], color='grey')
+            #ax[i][j].fill_between(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosionList[-1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + depositionList[-1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], alpha=0.2)
+            #ax[i][j].fill_between(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosionList[-1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + depositionList[-1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], alpha=0.2)
+            ax[i][j].fill_between(LP_position[LP_startIndex[j]:LP_stopIndex[j]], (0 - erosionList[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + depositionList[0][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], (0 - erosionList[-1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]] + depositionList[-1][erosion_startIndex[i][j]:erosion_stopIndex[i][j]])*unitFactor[0], alpha=0.2, color='grey')
+
+            ax[i][j].legend()
+            ax[i][j].set_ylabel(y_label[0][i][j])
+
+            ax[1][j].set_xlabel('distance from pumping gap (m)')
+
+    if safe == '':
+        safe = 'results/erosionFullCampaign/{campaign}_{Ts}_compareErosion{rates}_{config}{extrapolated}.png'.format(campaign=campaign, Ts=T_default, rates=rates, config=configuration, extrapolated=extrapolated)
+    fig.savefig(safe, bbox_inches='tight')
+    plt.show()
+    plt.close()
+
+#######################################################################################################################################################################        
 def appendY(Y_H: list[int|float], Y_C: list[int|float], Y_O: list[int|float], erosionRate: list[int|float], depositionRate: list[int|float], 
             Te: int|float, Ts: int|float, ne: int|float, timestep: int|float, alpha: int|float, zeta: int|float, 
             m_i: list[int|float], f_i: list[int|float], ions: list[str], k: int|float, n_target: int|float) -> list[list[int|float]]:
@@ -211,6 +284,7 @@ def appendY(Y_H: list[int|float], Y_C: list[int|float], Y_O: list[int|float], er
     depositionRate.append(depositionRate_dt)
     
     return Y_H, Y_C, Y_O, erosionRate, depositionRate
+#######################################################################################################################################################################        
 
 def averageValues(varyingQuantity: str, neList: list[int|float], TeList: list[int|float], TsList: list[int|float], alphaList: list[int|float], zetaList: list[int|float], 
                   neIndex: int =2, TeIndex: int =2, TsIndex: int =2, alphaIndex: int =1, zetaIndex: int =1):

@@ -148,6 +148,10 @@ def processOP2Data(discharge: str,
                    ne_upper: list[list[int|float]], 
                    Te_lower: list[list[int|float]], 
                    Te_upper: list[list[int|float]], 
+                   sne_lower: list[list[int|float]],
+                   sne_upper: list[list[int|float]], 
+                   sTe_lower: list[list[int|float]], 
+                   sTe_upper: list[list[int|float]], 
                    Ts_lower: list[list[int|float]], 
                    Ts_upper: list[list[int|float]], 
                    t_lower: list[list[int|float]], 
@@ -184,19 +188,19 @@ def processOP2Data(discharge: str,
     erosionRate_dt_position, erodedLayerThickness_dt_position, erodedLayerThickness_position = [], [], []
     depositionRate_dt_position, depositedLayerThickness_dt_position, depositedLayerThickness_position = [], [], []
     LP, LP_distance, time = [], [], [] #LP is the number of the langmuir probe and which divertor unit it belongs to, LP_distance is the distance in [m] from the pumping gap
-    ne, Te, Ts = [], [], []
+    ne, Te, Ts, sne, sTe = [], [], [], [], []
 
     divertorUnit = 'lower'
 
     #treat each divertor unit separately
-    for ne_divertorUnit, Te_divertorUnit, Ti_divertorUnit, Ts_divertorUnit, LP_indices, t_divertorUnit in zip([ne_lower, ne_upper], [Te_lower, Te_upper], [Te_lower, Te_upper], [Ts_lower, Ts_upper], [index_lower, index_upper], [t_lower, t_upper]):
+    for ne_divertorUnit, Te_divertorUnit, sne_divertorUnit, sTe_divertorUnit, Ti_divertorUnit, Ts_divertorUnit, LP_indices, t_divertorUnit in zip([ne_lower, ne_upper], [Te_lower, Te_upper], [sne_lower, sne_upper], [sTe_lower, sTe_upper], [Te_lower, Te_upper], [Ts_lower, Ts_upper], [index_lower, index_upper], [t_lower, t_upper]):
         
         Y_0_divertorUnit, Y_1_divertorUnit, Y_2_divertorUnit, Y_3_divertorUnit, Y_4_divertorUnit = [], [], [], [], []
         erosionRate_dt_divertorUnit, erodedLayerThickness_dt_divertorUnit, erodedLayerThickness_divertorUnit = [], [], []
         depositionRate_dt_divertorUnit, depositedLayerThickness_dt_divertorUnit, depositedLayerThickness_divertorUnit = [], [], []
 
         #treat each langmuir probe position separately
-        for n_e, T_e, T_i, T_s, LP_index, dt in zip(ne_divertorUnit, Te_divertorUnit, Ti_divertorUnit, Ts_divertorUnit, LP_indices, t_divertorUnit):
+        for n_e, T_e, sn_e, sT_e, T_i, T_s, LP_index, dt in zip(ne_divertorUnit, Te_divertorUnit, sne_divertorUnit, sTe_divertorUnit, Ti_divertorUnit, Ts_divertorUnit, LP_indices, t_divertorUnit):
             #I need the time differences between two adjacent times to give to the function below
             #changed1#####################
             if len(dt) != 0:
@@ -243,7 +247,9 @@ def processOP2Data(discharge: str,
             depositedLayerThickness_divertorUnit.append(depositedLayerThickness)
             
             ne.append(n_e)
+            sne.append(sn_e)
             Te.append(T_e)
+            sTe.append(sT_e)
             Ts.append(T_s)
             
             time.append(dt)
@@ -271,7 +277,9 @@ def processOP2Data(discharge: str,
                     'Position':list(itertools.chain.from_iterable(LP_distance)),
                     'time':list(itertools.chain.from_iterable(time)),
                     'ne':list(itertools.chain.from_iterable(ne)),
+                    'sne':list(itertools.chain.from_iterable(sne)),
                     'Te':list(itertools.chain.from_iterable(Te)),
+                    'sTe':list(itertools.chain.from_iterable(sTe)),
                     'Ts':list(itertools.chain.from_iterable(Ts)),
                     'Y_H':list(itertools.chain.from_iterable(list(itertools.chain.from_iterable(Y_H)))), 
                     'Y_D':list(itertools.chain.from_iterable(list(itertools.chain.from_iterable(Y_D)))), 
@@ -362,7 +370,7 @@ def intrapolateMissingValues(discharge: str,
     times = [times] * len(LPindices)
     times = np.hstack(np.array(times)) #flattens times to get an one dimensional array
 
-    for quantity_column, replacer in zip(['ne', 'Te', 'Ts'], defaultValues): #replacer is the value that is inserted if no data is present for the whole discharge
+    for quantity_column, replacer in zip(['ne', 'Te', 'Ts', 'sne', 'sTe'], defaultValues): #replacer is the value that is inserted if no data is present for the whole discharge
         quantity_list = []
         quantity_origin = []
         for index, quantity in enumerate(overviewTable[quantity_column]):
@@ -408,9 +416,15 @@ def intrapolateMissingValues(discharge: str,
         elif quantity_column == 'Te':
             Te_list = np.array(np.array_split(np.array(quantity_list), len(LPindices)))
             origin_Te = quantity_origin
-        else:
+        elif quantity_column == 'Ts':
             Ts_list = np.array(np.array_split(np.array(quantity_list), len(LPindices)))
             origin_Ts = quantity_origin
+        elif quantity_column == 'sne':
+            sne_list = np.array(np.array_split(np.array(quantity_list), len(LPindices))) #inserted np.array() around quantity_list, in case there are any problems, that could be why
+            origin_sne = quantity_origin
+        elif quantity_column == 'sTe':
+            sTe_list = np.array(np.array_split(np.array(quantity_list), len(LPindices)))
+            origin_sTe = quantity_origin
     #changed1####################
     if len(times) != 0:
         if len(times) > 1:
@@ -466,6 +480,10 @@ def intrapolateMissingValues(discharge: str,
     overviewTable['origin_ne'] = origin_ne
     overviewTable['Te'] = np.hstack(Te_list)
     overviewTable['origin_Te'] = origin_Te
+    overviewTable['sne'] = np.hstack(sne_list)
+    overviewTable['origin_sne'] = origin_sne
+    overviewTable['sTe'] = np.hstack(sTe_list)
+    overviewTable['origin_sTe'] = origin_sTe
     overviewTable['Ts'] = np.hstack(Ts_list)
     overviewTable['origin_Ts'] = origin_Ts
     overviewTable['Y_H'] = np.hstack(Y_0)
@@ -921,11 +939,13 @@ def calculateTotalErodedLayerThicknessWholeCampaignPerConfig(config: str,
 
 #######################################################################################################################################################################        
 def calculateTotalErodedLayerThicknessWholeCampaign(n_target: int|float,
+                                                    m_i: list[int|float], f_i: list[int|float], alpha: int|float, zeta: list[int|float],
                                                     configurationList: list[str], 
                                                     configurationChosen: str,
                                                     LP_position: list[int|float], 
                                                     campaign: str ='',
                                                     T_default: str ='',
+                                                    errors: bool = False,
                                                     totalErosionFiles: str ='results/erosionExtrapolatedConfig/totalErosionAtPositionWholeCampaign_',
                                                     configurationOverview: str ='inputFiles/Overview4.csv') -> int|float:
     ''' This function calculates total erosion/deposition layer thickness for all LPs that occurred during the whole campaign in all/some configurations listed in "configurationList"
@@ -1006,9 +1026,18 @@ def calculateTotalErodedLayerThicknessWholeCampaign(n_target: int|float,
     #print(erosion_rate)    
     #print(deposition_rate)   
 
+    erosionStd = getErrorBarsForErosion(m_i, f_i, alpha, zeta, campaign, configurationChosen, duration_ero, n_target)
+    erosion_rateStd = np.array(erosionStd)/duration_ero
+    depositionStd = getErrorBarsForDeposition(m_i, f_i, zeta, campaign, configurationChosen, duration_depo, n_target)
+    deposition_rateStd = np.array(depositionStd)/duration_depo
+    if not errors:
+        erosionStd = np.array(erosionStd) * 0
+        erosion_rateStd = np.array(erosionStd) * 0
+        depositionStd = np.array(erosionStd) * 0
+        deposition_rateStd = np.array(erosionStd) * 0
     #plot low iota, not extrapolated
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, '', configurationChosen, campaign, T_default)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, '', configurationChosen, campaign, T_default, False, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, erosionStd, depositionStd, '', configurationChosen, campaign, T_default)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, erosion_rateStd, deposition_rateStd, '', configurationChosen, campaign, T_default, False, True)
     #plot.plotTotalErodedLayerThickness(LP_position, erosion_position, deposition_position, 'low', configurationChosen, campaign, T_default)
     #plot.plotTotalErodedLayerThickness(LP_position, erosion_rate, deposition_rate, 'low', configurationChosen, campaign, T_default, False, True)
 
@@ -1106,7 +1135,10 @@ def calculateTotalErodedLayerThicknessWholeCampaign(n_target: int|float,
     #for extraplated values -> extrapolate values for missing configurations generally##################
     erosion_total, deposition_total = np.array([0.] * 36), np.array([0.] * 36)
     duration_total = 0
+
     
+    #copy dataframe dataOverview but write extrapolated values to it
+    dataOverview3 = pd.DataFrame({'LP': dataOverview['LP']})    
     for iota in ['low', 'standard', 'high']:
         duration_total_iota = 0
         erosion_total_iota = []
@@ -1141,8 +1173,6 @@ def calculateTotalErodedLayerThicknessWholeCampaign(n_target: int|float,
             else:
                 deposition_total_iota.append(0)
 
-        #copy dataframe dataOverview but write extrapolated values to it
-        dataOverview3 = pd.DataFrame({'LP': dataOverview['LP']})
         for config in configurationList:
             if config in config_missing:
                 continue
@@ -1180,10 +1210,20 @@ def calculateTotalErodedLayerThicknessWholeCampaign(n_target: int|float,
     else:
         erosion_rate_total = np.zeros_like(erosion_rate_total)
         deposition_rate_total = np.zeros_like(erosion_rate_total)
-
+    
+    erosion_totalStd = getErrorBarsForErosion(m_i, f_i, alpha, zeta, campaign, configurationChosen, duration_total, n_target)
+    erosion_rate_totalStd = np.array(erosion_totalStd)/duration_total
+    deposition_totalStd = getErrorBarsForDeposition(m_i, f_i, zeta, campaign, configurationChosen, duration_total, n_target)
+    deposition_rate_totalStd = np.array(deposition_totalStd)/duration_total
+    if not errors:
+        erosion_totalStd = np.array(erosionStd) * 0
+        erosion_rate_totalStd = np.array(erosionStd) * 0
+        deposition_totalStd = np.array(erosionStd) * 0
+        deposition_rate_totalStd = np.array(erosionStd) * 0
+    
     #plot low iota, extrapolated
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, '', configurationChosen, campaign, T_default, True)
-    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, '', configurationChosen, campaign, T_default, True, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, erosion_totalStd, deposition_totalStd, '', configurationChosen, campaign, T_default, True)
+    plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, erosion_rate_totalStd, deposition_rate_totalStd, '', configurationChosen, campaign, T_default, True, True)
     #plot.plotTotalErodedLayerThickness(LP_position, erosion_total, deposition_total, 'low', configurationChosen, campaign, T_default, True)
     #plot.plotTotalErodedLayerThickness(LP_position, erosion_rate_total, deposition_rate_total, 'low', configurationChosen, campaign, T_default, True, True)
     
@@ -1204,10 +1244,109 @@ def calculateTotalErodedLayerThicknessWholeCampaign(n_target: int|float,
     return mass
 
 ##################################################################################################################################################################
+def calculateTotalErodedLayerThicknessFromOverviewFile(m_i: list[int|float], f_iList: list[list[int|float]], alpha: int|float, zeta: list[int|float], n_target: int|float, campaign: str, config_short: str, extrapolated: bool, LPposition: list[int|float], LPexcluded: list[int] =[], T_default: str ='320K', overviewFile: str ='_totalErosionWholeCampaignAllPositions') -> list[list[float]]:
+    mass = []
+    erosionList, erosion_rateList, depositionList, deposition_rateList = [], [], [], []
+    erosionStdList, erosion_rateStdList, depositionStdList, deposition_rateStdList = [], [], [], []
+    for f_i in f_iList:
+        conc = str(f_i[0]).split('.')[1] + '_' + str(f_i[3]).split('.')[1] + '_' + str(f_i[4]).split('.')[1]
+        if extrapolated:
+            overviewFilePath = f'results{campaign}_{conc}/erosionFullCampaign/{campaign}_{T_default}{overviewFile}Extrapolated.csv'
+        else:
+            overviewFilePath = f'results{campaign}_{conc}/erosionFullCampaign/{campaign}_{T_default}{overviewFile}.csv'
+
+        if not os.path.isfile(overviewFilePath):
+            print(f'No overview file present under "{overviewFile}"')
+            continue
+
+        overviewTable = pd.read_csv(overviewFilePath, sep=';')
+        keys = np.array(overviewTable.keys())
+
+        if config_short == 'all':
+            filterKeysErosion = np.array(['erosion' in key for key in keys])
+            filterKeysDeposition = np.array(['deposition' in key for key in keys])
+            filterKeysDuration = np.array(['duration' in key for key in keys])
+        else:
+            filterKeysErosion = np.array([config_short in key and 'erosion' in key for key in keys])
+            filterKeysDeposition = np.array([config_short in key and 'deposition' in key for key in keys])
+            filterKeysDuration = np.array([config_short in key and 'duration' in key for key in keys])
+
+        keysErosion = keys[filterKeysErosion]
+        keysDeposition = keys[filterKeysDeposition]
+        keysDuration = keys[filterKeysDuration]
+
+        erosion = np.array([0.]*36)
+        deposition = np.array([0.]*36)
+        duration = np.array([0.]*36)
+
+        for keyEro, keyDepo, keyDur in zip(keysErosion, keysDeposition, keysDuration):
+            erosion = np.hstack(np.nansum(np.dstack((np.array(overviewTable[keyEro]), erosion)), 2))
+            deposition = np.hstack(np.nansum(np.dstack((np.array(overviewTable[keyDepo]), deposition)), 2))
+            for i in range(len(overviewTable[keyEro])):
+                if overviewTable[keyEro][i] != 0 and not np.isnan(overviewTable[keyEro][i]):
+                    duration[i] = duration[i] + overviewTable[keyDur][i]
+
+        erosionStd = getErrorBarsForErosion(m_i, f_i, alpha, zeta, campaign, config_short, duration, n_target)
+        depositionStd = getErrorBarsForDeposition(m_i, f_i, zeta, campaign, config_short, duration, n_target)
+
+        for i in LPexcluded:
+            LPposition[i] = np.nan
+            erosion[i] = np.nan
+            deposition[i] = np.nan
+            erosionStd[i] = np.nan
+            deposition[i] = np.nan
+        
+        erosion_rate = erosion/np.array(duration)
+        deposition_rate = deposition/np.array(duration)
+        erosion_rateStd = np.array(erosionStd)/np.array(duration)
+        deposition_rateStd = np.array(depositionStd)/np.array(duration)
+
+        #erosionStd = np.array(erosionStd) * 0
+        #erosion_rateStd = np.array(erosionStd) * 0
+        #depositionStd = np.array(erosionStd) * 0
+        #deposition_rateStd = np.array(erosionStd) * 0
+
+        plot.plotTotalErodedLayerThickness(LPposition, erosion, deposition, erosionStd, depositionStd, '', config_short, campaign, T_default, extrapolated, safe='results{campaign}_{conc}/erosionFullCampaign/{campaign}_{Ts}_totalErosion{rates}_{config}{iota}{extrapolated}.png'.format(campaign=campaign, conc=conc, Ts=T_default, rates='Layers', iota='', config=config_short, extrapolated=extrapolated))
+        plot.plotTotalErodedLayerThickness(LPposition, erosion_rate, deposition_rate, erosion_rateStd, deposition_rateStd, '', config_short, campaign, T_default, True, True, safe='results{campaign}_{conc}/erosionFullCampaign/{campaign}_{Ts}_totalErosion{rates}_{config}{iota}{extrapolated}.png'.format(campaign=campaign, conc=conc, Ts=T_default, rates='Rates', iota='', config=config_short, extrapolated=extrapolated))
+    
+        mass.append(approximationErodedMaterialMassWholeCampaign(LPposition, erosion, deposition, n_target))
+        
+        erosionList.append(erosion)
+        depositionList.append(deposition)
+        erosionStdList.append(erosionStd)
+        depositionStdList.append(depositionStd)
+        erosion_rateList.append(erosion_rate)
+        deposition_rateList.append(deposition_rate)
+        erosion_rateStdList.append(erosion_rateStd)
+        deposition_rateStdList.append(deposition_rateStd)
+
+    plot.plotComparisonErodedLayerThickness(LPposition, erosionList, depositionList, erosionStdList, depositionStdList, 1, config_short, campaign, T_default, extrapolated)
+    plot.plotComparisonErodedLayerThickness(LPposition, erosion_rateList, deposition_rateList, erosion_rateStdList, deposition_rateStdList, 1, config_short, campaign, T_default, extrapolated, True)
+
+    return mass
+
+##################################################################################################################################################################
 def approximationErodedMaterialMassWholeCampaign(LP_position: list[int|float], erosion: list[int|float], deposition: list[int|float], n_target: int|float, M_target: int|float =12.011) -> float:
     ''' returns the mass of net eroded/deposited (</> 0) target material in g'''
     LP_position = list(itertools.chain.from_iterable([LP_position, LP_position]))
     indices = [0, 14, 18, 32, 36]
+
+    erosionNAN = np.array([not np.isnan(x) for x in erosion])
+    erosion = np.array(erosion)[erosionNAN]
+    deposition = np.array(deposition)[erosionNAN]
+    excludedIndex = np.array(range(36))[~erosionNAN]
+    LP_position = np.array(LP_position)[erosionNAN]
+
+    for index in excludedIndex:
+        if index < 14:
+            indices[1] -= 1
+        elif index < 18:
+            indices[2] -= 1
+        elif index < 32:
+            indices[3] -= 1
+        elif index < 36:
+            indices[4] -= 1
+
     volume, volumeEro, volumeDep = 0, 0, 0
     for i in [0, 2]:#for i in range(len(indices) - 1):
         crossSection, crossSectionEro, crossSectionDep = 0, 0, 0
@@ -1229,10 +1368,12 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
                                              LP_position: list[int|float], 
                                              campaign: str ='',
                                              dischargeList: str ='results/configurations/dischargeList_', 
-                                             excluded :list[str] = []) -> str|None:
+                                             excluded :list[str] = [],
+                                             errorscalculated: bool =False) -> str|None:
     ''' This function calculates the average value for one of the quantities ne, Te, or Ts (="quantity") for one configuration "config"
         -> at all Langmuir Probe positions given in "LP_position"
-        -> for all discharges in "config" and in "campaign" given in "dischargeList" but not in "excluded"'''
+        -> for all discharges in "config" and in "campaign" given in "dischargeList" but not in "excluded"
+        "errorscalculated" means that errors are read from existing file instead of being calculated'''
     if campaign == '':
         campaign = 'OP223'
 
@@ -1241,7 +1382,11 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
     
     dischargeOverview = pd.read_csv(dischargeList + campaign + '_{config}.csv'.format(config=config), sep=';')
     averageConfiguration = np.array([0.]*36)
+    averageConfigurationStd = np.array([[0.]]*36)
+    averageConfigurationStdData = np.array([[0.]]*36)
     timeConfiguration = np.array([0.]*36)
+    x = np.nansum(np.array(dischargeOverview['duration']))
+    timeConfigurationTotal = np.array([x]*36)
     for discharge, duration, overviewTable in zip(dischargeOverview['dischargeID'], dischargeOverview['duration'], dischargeOverview['overviewTable']):
         discharge = str(discharge)
 
@@ -1301,12 +1446,16 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
 
         LPs = list(LPs)
         averageListDischarge = []
+        averageListDischargeStdData = []
+        averageListDischargeStd = []
         timeDischarge = []
         for DUindex in ['lower', 'upper']:
             for LPindex in range(18):
                 if DUindex + str(LPindex) in LPs:
                     counter = LPs.index(DUindex + str(LPindex))
                     averageDischarge = 0
+                    averageDischargeStdData = 0
+                    averageDischargeStd = []
                     duration_measurement = 0
                     for counter2, dt in enumerate(timesteps):
                         indexCounter = counter * len(timesteps) + counter2
@@ -1314,38 +1463,72 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
                             if quantity == 'Te':
                                 if list(overviewTable[quantity])[indexCounter] != 320:
                                     averageDischarge += list(overviewTable[quantity])[indexCounter] * dt
+                                    averageDischargeStdData += 0
                                     duration_measurement += dt
+                                    if np.isnan(dt):
+                                        dt = 0
+                                    for correction in range(int(dt*10)):
+                                        averageDischargeStd.append(list(overviewTable[quantity])[indexCounter])
                                 else:
                                     continue
                             else:
                                 averageDischarge += list(overviewTable[quantity])[indexCounter] * dt
+                                averageDischargeStdData += list(overviewTable['s'+quantity])[indexCounter] * dt
                                 duration_measurement += dt
+                                if np.isnan(dt):
+                                    dt = 0 
+                                for correction in range(int(dt*10)):
+                                    averageDischargeStd.append(list(overviewTable[quantity])[indexCounter])
                         else:
                             continue
                     if duration_measurement != 0:
                         averageListDischarge.append(averageDischarge/duration_measurement)
+                        averageListDischargeStdData.append(averageDischargeStdData/duration_measurement)
+#1                        averageListDischargeStd.append(np.std(np.array(averageDischargeStd)/duration_measurement))
+                        averageListDischargeStd.append(averageDischargeStd)
                         timeDischarge.append(duration_measurement)
                     else:
                         averageListDischarge.append(0)
+                        averageListDischargeStdData.append(0)
+#1                        averageListDischargeStd.append(0)
+                        averageListDischargeStd.append([np.nan])
                         timeDischarge.append(0)
                 else:
                     averageListDischarge.append(0)
+                    averageListDischargeStdData.append(0)
+#1                    averageListDischargeStd.append(0)
+                    averageListDischargeStd.append([np.nan])
                     timeDischarge.append(0)
         averageConfiguration = np.hstack(np.nansum(np.dstack((np.array(averageConfiguration), (np.array(averageListDischarge) * np.array(timeDischarge)))), 2))
+        averageConfigurationStdData = np.hstack(np.nansum(np.dstack((np.array(averageConfigurationStdData), (np.array(averageListDischargeStdData) * np.array(timeDischarge)))), 2))
+#1        averageConfigurationStd = np.hstack(np.nansum(np.dstack((np.array(averageConfigurationStd), (np.array(averageListDischargeStd)**2 * np.array(timeDischarge)**2))), 2))
+        help = []
+        for i in range(len(averageConfigurationStd)):
+            help2 = [averageConfigurationStd[i]]
+            help2.append(averageListDischargeStd[i])
+            help.append(list(itertools.chain.from_iterable(help2)))
+        averageConfigurationStd = help.copy()
         timeConfiguration = np.hstack(np.nansum(np.dstack((np.array(timeConfiguration), np.array(timeDischarge))), 2))
     averageConfiguration = averageConfiguration/timeConfiguration
+    averageConfigurationStdData = averageConfigurationStdData/timeConfiguration
+#1    averageConfigurationStd = np.sqrt(averageConfigurationStd)/timeConfiguration
+#1    averageConfigurationStd = np.std(np.array(averageConfigurationStd))/timeConfiguration
+    help = []
+    for i in range(len(averageConfigurationStd)):
+        help.append(np.nanstd(np.array(averageConfigurationStd[i])))    
+    averageConfigurationStd = help
 
     if not os.path.exists('results/averageQuantities/{quantity}/{config}'.format(quantity=quantity, config=config)):
         os.makedirs('results/averageQuantities/{quantity}/{config}'.format(quantity=quantity, config=config)) 
 
     fig, ax = plt.subplots(2, 1, layout='constrained', figsize=(7, 10), sharex=True)
 
-    ax[0].plot(LP_position[:14], averageConfiguration[:14], 'b', label='lower divertor unit')
-    ax[0].plot(LP_position[:14], averageConfiguration[18:32], 'm', label='upper divertor unit')
+    ax[0].errorbar(LP_position[:14], averageConfiguration[:14], yerr=averageConfigurationStd[:14], fmt='b-', capsize=4, label='lower divertor unit')
+    ax[0].errorbar(LP_position[:14], averageConfiguration[18:32], yerr=averageConfigurationStd[18:32], fmt='m-', capsize=4, label='upper divertor unit')
     ax[0].legend()
     ax[0].set_ylabel('Low iota: average ' + quantity)
-    ax[1].plot(LP_position[14:], averageConfiguration[14:18], 'b', label='lower divertor unit')
-    ax[1].plot(LP_position[14:], averageConfiguration[32:], 'm', label='upper divertor unit')
+    ax[1].errorbar(LP_position[14:], averageConfiguration[14:18], yerr=averageConfigurationStd[14:18], fmt='b-', capsize=4, label='lower divertor unit')
+    ax[1].errorbar(LP_position[14:], averageConfiguration[32:], yerr=averageConfigurationStd[32:], fmt='m-', capsize=4, label='upper divertor unit')
     ax[1].legend()
     ax[1].set_xlabel('distance from pumping gap (m)')
     ax[1].set_ylabel('High iota: average ' + quantity)
@@ -1353,7 +1536,11 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
     plt.show()
     plt.close()
 
-    return averageConfiguration, timeConfiguration
+    for i, timeConfig in enumerate(timeConfiguration):
+        if timeConfig == 0:
+            timeConfigurationTotal[i] = 0
+
+    return averageConfiguration, timeConfiguration, timeConfigurationTotal, averageConfigurationStd, averageConfigurationStdData
 ##################################################################################################################################################################
 
 def frameCalculateAverageQuantityPerConfiguration(quantities: list[str], 
@@ -1361,17 +1548,47 @@ def frameCalculateAverageQuantityPerConfiguration(quantities: list[str],
                                                   configurations: list[str], 
                                                   LP_position: list[int|float],
                                                   config_short: bool|str =False, 
-                                                  excluded: list[str] =[]) -> None: 
+                                                  excluded: list[str] =[],
+                                                  Calculated: bool =False,
+                                                  calculatedFile: str ='results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv') -> None: 
     ''' This function is the frame work for calculateAverageQuantityPerConfiguration
         It determines the average value of each quantity given in "quantities" (ne, Te, Ts) at each Langmuir Probe position given by "LP_position"
         -> for each configuration given in "configurations" (if file with discharges exists) and matching "config_short"
         -> "config_short can be False, then the average of all configurations is determined, or e.g. 'EIM', then only EIM... configurations are considered for the total average
         -> distinguishes between "campaigns" 'OP22', 'OP23', and '' meaning both campaigns
-        "excluded" is a list of discharges that should be excluded from averaging'''       
+        "excluded" is a list of discharges that should be excluded from averaging
+        "Calculated" True means reading errors from calculatedFile instead of calculating them'''       
+    
     averageReturn = []
+    averageReturnStd = []
+
+    if Calculated:
+        averageFrame = pd.read_csv(calculatedFile, sep=';')
+        for quantity in quantities:
+            for campaign in campaigns:
+                if type(config_short) == bool:
+                    config_short = 'all'
+                if campaign == '':
+                    campaignTXT = 'OP223'
+                else:
+                    campaignTXT = campaign
+                averageReturn.append(averageFrame[campaignTXT + config_short + quantity])
+                averageReturnStd.append(averageFrame[campaignTXT + config_short + quantity + 'Std'])
+        return averageReturn, averageReturnStd
+        
     for quantity in quantities:
+        if quantity == 'ne':
+            quantityUnit = 'm$^{-3}$'
+        elif quantity == 'Te':
+            quantityUnit = 'eV'
+        elif quantity == 'Ts':
+            quantityUnit = 'K'
+        else:
+            quantityUnit = ''
+
         for campaign in campaigns:
             averageCampaign = np.array([0.] * 36)
+            averageCampaignStd = np.array([0.] * 36)
             timeCampaign = np.array([0.] * 36)
             
             for config in configurations:
@@ -1383,34 +1600,48 @@ def frameCalculateAverageQuantityPerConfiguration(quantities: list[str],
                         continue
                 else:
                     configChosen = ''
-
+                
                 resultAverage = calculateAverageQuantityPerConfiguration(quantity, config, LP_position, campaign, excluded=excluded)
                 if type(resultAverage) == str:
                     print(resultAverage)
                 else:  
-                    timeCampaign = np.hstack(np.nansum(np.dstack((np.array(timeCampaign), np.array(resultAverage[1]))), 2))
-                    averageCampaign = np.hstack(np.nansum(np.dstack((np.array(averageCampaign), ((np.array(resultAverage[1])*np.array(resultAverage[0]))) )), 2))
+                    timeCampaign = np.hstack(np.nansum(np.dstack((np.array(timeCampaign), np.array(resultAverage[2]))), 2))
+                    #timeCampaign = np.hstack(np.nansum(np.dstack((np.array(timeCampaign), np.array(resultAverage[1]))), 2))
+                    averageCampaign = np.hstack(np.nansum(np.dstack((np.array(averageCampaign), ((np.array(resultAverage[2])*np.array(resultAverage[0]))) )), 2))
+                    if quantity == 'Ts':
+                        averageCampaignStd = np.hstack(np.nansum(np.dstack((np.array(averageCampaignStd), ((np.array(resultAverage[2])**2 * np.array(resultAverage[3])**2)) )), 2))
+                    else:    
+                        averageCampaignStd = np.hstack(np.nansum(np.dstack((np.array(averageCampaignStd), ((np.array(resultAverage[2])**2 * np.array(resultAverage[4])**2)) )), 2))
+                    #averageCampaign = np.hstack(np.nansum(np.dstack((np.array(averageCampaign), ((np.array(resultAverage[1])*np.array(resultAverage[0]))) )), 2))
         
             averageCampaign = averageCampaign/timeCampaign
+            averageCampaignStd = np.sqrt(averageCampaignStd)/timeCampaign
 
-            fig, ax = plt.subplots(2, 1, layout='constrained', figsize=(7, 10), sharex=True)
+            fig, ax = plt.subplots(2, 2, layout='constrained', figsize=(12, 10), sharex='col', sharey=True)
 
-            ax[1].plot(LP_position[14:], averageCampaign[14:18], 'b', label='lower divertor unit')
-            ax[1].plot(LP_position[14:], averageCampaign[32:], 'm', label='upper divertor unit')
-            ax[0].plot(LP_position[:14], averageCampaign[:14], 'b', label='lower divertor unit')
-            ax[0].plot(LP_position[:14], averageCampaign[18:32], 'm', label='upper divertor unit')
-            ax[0].legend()
-            ax[1].legend()
-            ax[1].set_xlabel('distance from pumping gap (m)')
-            ax[0].set_ylabel('Low iota: average ' + quantity)
-            ax[1].set_ylabel('High iota: average ' + quantity)
+            ax[0][1].errorbar(LP_position[14:], averageCampaign[14:18], yerr=averageCampaignStd[14:18], fmt='k-', capsize=4, label='lower divertor unit')
+            ax[1][1].errorbar(LP_position[14:], averageCampaign[32:], yerr=averageCampaignStd[32:], fmt='k-', capsize=4, label='upper divertor unit')
+            ax[0][0].errorbar(LP_position[:14], averageCampaign[:14], yerr=averageCampaignStd[:14], fmt='k-', capsize=4, label='lower divertor unit')
+            ax[1][0].errorbar(LP_position[:14], averageCampaign[18:32], yerr=averageCampaignStd[18:32], fmt='k-', capsize=4, label='upper divertor unit')
+            for i in range(2):
+                for j in range(2):
+                    ax[i][j].legend()
+                    ax[i][j].set_ylim(bottom=0)
+
+            ax[1][1].set_xlabel('distance from pumping gap (m)')
+            ax[1][0].set_xlabel('distance from pumping gap (m)')
+            ax[0][0].set_ylabel(f'Low iota: average {quantity} lower divertor unit in ({quantityUnit})')
+            ax[0][1].set_ylabel(f'Low iota: average {quantity} upper divertor unit in ({quantityUnit})')
+            ax[0][1].set_ylabel(f'High iota: average {quantity} lower divertor unit in ({quantityUnit})')
+            ax[1][1].set_ylabel(f'High iota: average {quantity} upper divertor unit in ({quantityUnit})')
             fig.savefig('results/averageQuantities/{quantity}/{quantity}{campaign}{configChosen}AverageAllPositionsHighIota.png'.format(quantity=quantity, campaign=campaign, configChosen=configChosen), bbox_inches='tight')
             plt.show()
             plt.close()
 
             averageReturn.append(averageCampaign)
+            averageReturnStd.append(averageCampaignStd)
 
-    return averageReturn
+    return averageReturn, averageReturnStd
 
 ############################################################################################################################
 def approximationOfLayerThicknessesBasedOnAverageParameterValues(LP_position: list[int|float], campaign: str,
@@ -1468,3 +1699,130 @@ def approximationOfLayerThicknessesBasedOnAverageParameterValues(LP_position: li
     mass = approximationErodedMaterialMassWholeCampaign(LP_position, erosion, deposition, n_target)
     
     return mass
+
+###################################################################################################################
+def getErrorBarsForFluxDensity(m_i: list[int|float], f_i: list[int|float], zeta:list[int|float], 
+                               campaign: str, config_short: str, filename_avParams: str ='results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv') -> list[list[int:float]]:
+    if not os.path.isfile(filename_avParams):
+        return 'no average parameter value file'
+    
+    else:
+        if type(config_short) == bool:
+            config_short = 'all'
+        if campaign == '':
+            campaignTXT = 'OP223'
+        else:
+            campaignTXT = campaign
+        
+        avParams = pd.read_csv(filename_avParams, sep=';')
+        deltaGamma = []
+        for m, f in zip(m_i, f_i):
+            ne = np.array(avParams[campaignTXT+config_short+'ne'])
+            neStd = np.array(avParams[campaignTXT+config_short+'neStd'])
+            Te = np.array(avParams[campaignTXT+config_short+'Te'])
+            TeStd = np.array(avParams[campaignTXT+config_short+'TeStd'])
+    
+            if len(zeta) != len(ne):
+                zeta = np.array(list(itertools.chain.from_iterable([zeta, zeta])))
+            else:
+                zeta = np.array(zeta)
+
+            deltaGamma.append(np.sqrt(f**2 * np.sin(zeta)**2 * 2 * scipy.constants.e/m * (Te * neStd**2 + ne**2 * 1/(4 * Te) * TeStd**2)))
+        
+        return deltaGamma
+
+###################################################################################################################
+def getErrorBarsForDeposition(m_i: list[int|float], f_i: list[int|float], zeta:list[int|float], 
+                              campaign: str, config_short: str, duration: int|float, n_target: int|float,
+                              filename_avParams: str ='results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv') -> list[list[int:float]]:
+    return duration/n_target * np.array(getErrorBarsForFluxDensity(m_i, f_i, zeta, campaign, config_short, filename_avParams)[3])
+
+###################################################################################################################
+def getErrorBarsForY(m_i: list[int|float], f_i: list[int|float], zeta:list[int|float], 
+                     campaign: str, config_short: str, 
+                     filename_avParams: str ='results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv',
+                     E: int|float =100) -> list[list[int:float]]:
+    if not os.path.isfile(filename_avParams):
+        return 'average parameter value file is missing'
+    
+    avParams = pd.read_csv(filename_avParams, sep=';')
+    if type(config_short) == bool:
+        config_short = 'all'
+    if campaign == '':
+        campaignTXT = 'OP223'
+    else:
+        campaignTXT = campaign
+
+    ne = np.array(avParams[campaignTXT+config_short+'ne'])
+    Te = np.array(avParams[campaignTXT+config_short+'Te'])
+    Ts = np.array(avParams[campaignTXT+config_short+'Ts'])
+    TsStd = np.array(avParams[campaignTXT+config_short+'TsStd'])
+
+    if len(zeta) != len(ne):
+        zeta = np.array(list(itertools.chain.from_iterable([zeta, zeta])))
+    else:
+        zeta = np.array(zeta)
+
+    gammaH = np.array([calc.calculateFluxIncidentIon(zeta[i], Te[i], Te[i], m_i[0], ne[i], f_i[0]) for i in range(len(Te))])
+    deltaGamma = np.array(getErrorBarsForFluxDensity(m_i, f_i, zeta, campaign, config_short, filename_avParams)[0])
+
+    deltaY = []
+    for i in range(len(Ts)):
+        yieldsH = []
+        Yav = calc.calculateChemicalErosionYieldRoth('H', E, Ts[i], gammaH[i])
+        for flux in np.linspace(gammaH[i]-deltaGamma[i], gammaH[i]+deltaGamma[i], 10):
+            for T in np.linspace(Ts[i]-TsStd[i], Ts[i]+TsStd[i], 10):
+                yieldsH.append(calc.calculateChemicalErosionYieldRoth('H', E, T, flux))
+        
+        if abs(Yav - min(yieldsH)) > abs(Yav - max(yieldsH)):
+            deltaY.append(abs(Yav - min(yieldsH)))
+        else:
+            deltaY.append(abs(Yav - max(yieldsH)))
+    #deltaY = np.array(deltaY)*0.    
+    return deltaY
+    
+###################################################################################################################
+def getErrorBarsForErosion(m_i: list[int|float], f_i: list[int|float], alpha: int|float, zeta:list[int|float], 
+                              campaign: str, config_short: str, duration: int|float, n_target: int|float,
+                              filename_avParams: str ='results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv') -> list[list[int:float]]:
+    if not os.path.isfile(filename_avParams):
+        return 'average parameter value file is missing'
+    
+    avParams = pd.read_csv(filename_avParams, sep=';')
+    if type(config_short) == bool:
+        config_short = 'all'
+    if campaign == '':
+        campaignTXT = 'OP223'
+    else:
+        campaignTXT = campaign
+
+    ne = np.array(avParams[campaignTXT+config_short+'ne'])
+    Te = np.array(avParams[campaignTXT+config_short+'Te'])
+    Ts = np.array(avParams[campaignTXT+config_short+'Ts'])
+    if len(zeta) != len(ne):
+        zeta = np.array(list(itertools.chain.from_iterable([zeta, zeta])))
+    else:
+        zeta = np.array(zeta)
+
+    gammaH = np.array([calc.calculateFluxIncidentIon(zeta[i], Te[i], Te[i], m_i[0], ne[i], f_i[0]) for i in range(len(Te))])
+    gammaC = np.array([calc.calculateFluxIncidentIon(zeta[i], Te[i], Te[i], m_i[3], ne[i], f_i[3]) for i in range(len(Te))])
+    gammaO = np.array([calc.calculateFluxIncidentIon(zeta[i], Te[i], Te[i], m_i[4], ne[i], f_i[4]) for i in range(len(Te))])
+
+    YH = np.array([calc.calculateTotalErosionYield('H', Te[i], 'C', alpha, Ts[i], gammaH[i], n_target) for i in range(len(Te))])
+    YC = np.array([calc.calculateTotalErosionYield('C', Te[i], 'C', alpha, Ts[i], gammaC[i], n_target) for i in range(len(Te))])
+    YO = np.array([calc.calculateTotalErosionYield('O', Te[i], 'C', alpha, Ts[i], gammaO[i], n_target) for i in range(len(Te))])
+    
+
+    deltaY = np.array(getErrorBarsForY(m_i, f_i, zeta, campaign, config_short, filename_avParams))
+    deltaGamma = getErrorBarsForFluxDensity(m_i, f_i, zeta, campaign, config_short, filename_avParams)
+    deltaErosion = duration/n_target * np.sqrt((gammaH * np.array(deltaY))**2 + (YH * np.array(deltaGamma[0]))**2 + (YC * np.array(deltaGamma[3]))**2 + (YO * np.array(deltaGamma[4]))**2) 
+
+    return deltaErosion
+
+###################################################################################################################
+def getErrorBarsForNetErosion(m_i: list[int|float], f_i: list[int|float], alpha: int|float, zeta:list[int|float], 
+                              campaign: str, config_short: str, duration: int|float, n_target: int|float,
+                              filename_avParams: str ='results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv') -> list[list[int:float]]:
+    errorErosion = getErrorBarsForErosion(m_i, f_i, alpha, zeta, campaign, config_short, duration, n_target, filename_avParams)
+    errorDeposition = getErrorBarsForDeposition(m_i, f_i, zeta, campaign, config_short, duration, n_target, filename_avParams)
+    return np.hstack(np.nansum(np.dstack((errorErosion, errorDeposition)), 2))

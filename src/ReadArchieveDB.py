@@ -312,7 +312,7 @@ def readLangmuirProbeDataFromXdrive(dischargeID: str) -> str|list[list]:
         return 'No LP data available'
     
     if data_lower[test_index[0]].units['time'] == 's' and data_lower[test_index[0]].units['ne'] == '10$^{18}$m$^{-3}$' and data_lower[test_index[0]].units['Te'] == 'eV':
-        ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper = [], [], [], [], [], []
+        ne_lower, ne_upper, Te_lower, Te_upper, sne_lower, sne_upper, sTe_lower, sTe_upper, t_lower, t_upper = [], [], [], [], [], [], [], [], [], []
         for i in index_lower:
             #ne_lower.append(list(data_lower[i].ne)) 
             
@@ -321,6 +321,8 @@ def readLangmuirProbeDataFromXdrive(dischargeID: str) -> str|list[list]:
 
             ne_lower.append(list(np.array(data_lower[i].ne)[~filter_lower]*1e+18))  #values are given as ne [1e+18 1/m^3]
             Te_lower.append(list(np.array(data_lower[i].Te)[~filter_lower]))
+            sne_lower.append(list(np.array(data_lower[i].sne)[~filter_lower]*1e+18))
+            sTe_lower.append(list(np.array(data_lower[i].sTe)[~filter_lower]))
             t_lower.append(list(np.array(data_lower[i].time)[~filter_lower]))
         
         for i in index_upper:
@@ -330,11 +332,13 @@ def readLangmuirProbeDataFromXdrive(dischargeID: str) -> str|list[list]:
             filter_upper = np.array([j == 0 for j in data_upper[i].time])
 
             ne_upper.append(list(np.array(data_upper[i].ne)[~filter_upper]*1e+18))  #values are given as ne [1e+18 1/m^3]
+            sne_upper.append(list(np.array(data_upper[i].sne)[~filter_upper]*1e+18))  #values are given as ne [1e+18 1/m^3]
             Te_upper.append(list(np.array(data_upper[i].Te)[~filter_upper]))
+            sTe_upper.append(list(np.array(data_upper[i].sTe)[~filter_upper]))
             t_upper.append(list(np.array(data_upper[i].time)[~filter_upper]))
         
         #careful, not all subarrays have the same shape, len(Te_upper[0]) == len(ne_upper[0]), but not neccessarily len(Te_upper[0]) == len(Te_upper[1])
-        return [ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper, index_lower, index_upper]
+        return [ne_lower, ne_upper, Te_lower, Te_upper, t_lower, t_upper, index_lower, index_upper, sne_lower, sne_upper, sTe_lower, sTe_upper]
     else:
         return 'wrong units'
 
