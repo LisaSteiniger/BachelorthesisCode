@@ -49,7 +49,7 @@ qNBI = 'tags.value:"NBI source 7" OR tags.value:"NBI source 8" AND'
 #######################################################################################################################################################################
 #VARIABLE INPUT PARAMETERS
 #ion concentrations (no unit) for [H, D, T, C, O]
-f_iList = [[0.93, 0.0, 0.0, 0.02, 0.01]]#,[0.91, 0.0, 0.0, 0.03, 0.01], [0.95, 0.0, 0.0, 0.01, 0.01]]#[0.868, 0, 0, 0.03, 0.0196]]#[[0.85, 0.0, 0.0, 0.06, 0.01], [0.87, 0.0, 0.0, 0.05, 0.01], [0.89, 0.0, 0.0, 0.04, 0.01], [0.91, 0.0, 0.0, 0.03, 0.01], [0.93, 0.0, 0.0, 0.02, 0.01], [0.95, 0.0, 0.0, 0.01, 0.01]]#[[0.933, 0, 0, 0.0335, 0.0], [0.9364, 0, 0, 0.03, 0.0012], [0.9411, 0, 0, 0.025, 0.003], [0.9457, 0, 0, 0.02, 0.0047], [0.9504, 0, 0, 0.015, 0.0065]]# [0.89, 0, 0, 0.04, 0.01]]
+f_iList = [[0.91, 0.0, 0.0, 0.03, 0.01], [0.93, 0.0, 0.0, 0.02, 0.01], [0.95, 0.0, 0.0, 0.01, 0.01]]#[0.868, 0, 0, 0.03, 0.0196]]#[[0.85, 0.0, 0.0, 0.06, 0.01], [0.87, 0.0, 0.0, 0.05, 0.01], [0.89, 0.0, 0.0, 0.04, 0.01], [0.91, 0.0, 0.0, 0.03, 0.01], [0.93, 0.0, 0.0, 0.02, 0.01], [0.95, 0.0, 0.0, 0.01, 0.01]]#[[0.933, 0, 0, 0.0335, 0.0], [0.9364, 0, 0, 0.03, 0.0012], [0.9411, 0, 0, 0.025, 0.003], [0.9457, 0, 0, 0.02, 0.0047], [0.9504, 0, 0, 0.015, 0.0065]]# [0.89, 0, 0, 0.04, 0.01]]
 #f_iList = [[0.85, 0.0, 0.0, 0.06, 0.01]]
 #target density of CFC-HHF divertor in [1/m^3]
 n_target = 9.526 * 1e28 #for rho=1.9 g/cm^3 (rho*1e6*N_A/M_C) N_A is avogadro number, M_C molecular mass of carbon
@@ -59,7 +59,7 @@ alpha = 2 * np.pi/9
 
 #default values to be inserted if no measurement data exists for electron density ne in [1/m^3], electron temperature Te in [eV], or surface temperature of the target Ts in [K]
 defaultValues = [np.nan, np.nan, 320, np.nan, np.nan]
-if np.isnan(defaultValues[-1]):
+if np.isnan(defaultValues[2]):
     T_default = 'NAN'    #additional information about treatment of missing T_s values for "safe" of various files 
 else:
     T_default = str(defaultValues[-1]) + 'K'
@@ -71,7 +71,7 @@ configurations = pd.read_csv('inputFiles/Overview2.csv')['configuration']
 #read.determineIotaForAllConfigurations()
 
 #list of campaigns to be looked at, '' means OP2.2 and OP2.3
-campaigns = ['OP23', 'OP22']#['', 'OP22', 'OP23']
+campaigns = ['OP22', 'OP23']#, 'OP22']#['', 'OP22', 'OP23']
 
 #reference discharges for impurity concentration analysis of carbon and oxygen by CXRS and DRGA
 impurityReferenceShots = ['20250304.075', '20250408.055', '20250408.079']
@@ -103,7 +103,7 @@ filesExist = True
 #should the measurement values be read out again?
 #set True only if there was a problem with the reading routine
 #if False, then already read out data wont be downloaded again
-reReadData = True
+reReadData = False
 
 #are missing values of ne, Te, Ts already intrapolated for the given combination of n_target, f_i, alpha (at least partially, missing files will be created anyways)? 
 #-> results/calculationTablesNew/results*.csv
@@ -147,8 +147,35 @@ LP_zeta_high = list(itertools.chain.from_iterable(LP_zeta_high))
 LP_zetas = [LP_zeta_low, LP_zeta_standard, LP_zeta_high]
 #same indices as LP_position
 
-print(process.calculateTotalErodedLayerThicknessFromOverviewFile(m_i, f_iList, alpha, LP_zetas[1], n_target, 'OP23', 'all', True, LP_position))
+#compare Langmuir Probe and HeBeam data for discharges given in HeBeamReferenceShots
+LPxyz = [OP2_TM2xyz]
+LPxyz.append(OP2_TM3xyz)
+LPxyz = list(itertools.chain.from_iterable(LPxyz))
+
+for shot in HeBeamReferenceShots:
+    read.compareLangmuirProbesWithHeBeam(LPxyz, shot) #incomplete for LPs and different timesteps
+
+#subresults (flux densities, physical and chemical sputtering yield, eroded and deposited layer thicknesses) for a set of ne, Te, Ts, alpha, zeta, t
+#process.subresults(m_i, f_i, ions)
+
+#parameter studies
+f_i = f_iList[0]
+neList = np.linspace(1e+18, 1e+20, 20)
+TeList = np.linspace(10, 20, 20)
+TsList = np.linspace(30+273.15, 700+273.15, 20)
+alphaList = np.linspace(15 * np.pi/180, 70 * np.pi/180, 20)
+zetaList = np.linspace(1 * np.pi/180, 4 * np.pi/180, 20)
+timestep = np.array([50000]) #duration of the erosion period (e.g. plasma time in campaign OP2.2 and OP2.3)
+plot.parameterStudy(neList, TeList, TsList, alphaList, zetaList, m_i, f_i, ions, k, n_target)
+
+#get impurity concentration trends from Hexos by looking at reference discharges
+#extensions.readHexosForReferenceDischarges()
+extensions.readHexosForReferenceDischargesAveraged()
+
+plot.plotEnergyDistribution(15, ['H', 'C', 'O'])
 '''
+#print(process.calculateTotalErodedLayerThicknessFromOverviewFile(m_i, f_iList, alpha, LP_zetas[1], n_target, 'OP23', 'all', True, LP_position))
+#'''
 #######################################################################################################################################################################
 #HERE IS THE RUNNING PROGRAM, NO CHANGES REQUIRED
 
@@ -307,13 +334,13 @@ if __name__ == '__main__':
                             t_upper[j].append(0)
 
                     Te_lower = np.array(Te_lower)
-                    sTe_lower = np.array(Te_lower)
+                    sTe_lower = np.array(sTe_lower)
                     Te_upper = np.array(Te_upper)
-                    sTe_upper = np.array(Te_upper)
+                    sTe_upper = np.array(sTe_upper)
                     ne_lower = np.array(ne_lower)
-                    sne_lower = np.array(ne_lower)
+                    sne_lower = np.array(sne_lower)
                     ne_upper = np.array(ne_upper)
-                    sne_upper = np.array(ne_upper)
+                    sne_upper = np.array(sne_upper)
                     t_lower = np.array(t_lower)
                     t_upper = np.array(t_upper)
                     #print(np.shape(Ts_lower), np.shape(Ts_upper), np.shape(ne_upper), np.shape(ne_lower), np.shape(Te_upper), np.shape(Te_lower))
@@ -352,6 +379,8 @@ if __name__ == '__main__':
                     averageFrame[campaignTXT + config_short + quantity] = averages[0][i]
                     averageFrame[campaignTXT + config_short + quantity + 'Std'] = averages[1][i]
             
+            averageFrame.to_csv('results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv', sep=';')
+
             #sums up all layer thicknesses of all configurations
             for configLayerThickness, zeta in zip(['all', 'EIM', 'FTM', 'DBM', 'KJM'], [LP_zetas[1], LP_zetas[1], LP_zetas[2], LP_zetas[0], LP_zetas[1]]):
                 erodedMass.append(process.calculateTotalErodedLayerThicknessWholeCampaign(n_target, m_i, f_i, alpha, zeta, configurations_OP, configLayerThickness, LP_position, campaign, T_default, False))    
@@ -378,6 +407,10 @@ if __name__ == '__main__':
 
         if f_i == f_iList[0]:
             avCalculated = True
+
+    print(process.calculateTotalErodedLayerThicknessFromOverviewFile(m_i, f_iList, alpha, LP_zetas[1], n_target, 'OP22', 'all', True, LP_position))
+    print(process.calculateTotalErodedLayerThicknessFromOverviewFile(m_i, f_iList, alpha, LP_zetas[1], n_target, 'OP23', 'all', True, LP_position))
+    
     #compare Langmuir Probe and HeBeam data for discharges given in HeBeamReferenceShots
     LPxyz = [OP2_TM2xyz]
     LPxyz.append(OP2_TM3xyz)
@@ -390,18 +423,18 @@ if __name__ == '__main__':
     #process.subresults(m_i, f_i, ions)
 
     #parameter studies
-    f_i = f_iList[2]
+    f_i = f_iList[1]
     neList = np.linspace(1e+18, 1e+20, 20)
     TeList = np.linspace(10, 20, 20)
     TsList = np.linspace(30+273.15, 700+273.15, 20)
-    alphaList = np.linspace(30 * np.pi/180, 70 * np.pi/180, 20)
-    zetaList = np.linspace(1 * np.pi/180, 3 * np.pi/180, 20)
+    alphaList = np.linspace(15 * np.pi/180, 70 * np.pi/180, 20)
+    zetaList = np.linspace(1 * np.pi/180, 4 * np.pi/180, 20)
     timestep = np.array([50000]) #duration of the erosion period (e.g. plasma time in campaign OP2.2 and OP2.3)
     plot.parameterStudy(neList, TeList, TsList, alphaList, zetaList, m_i, f_i, ions, k, n_target)
 
     #approximation of layer thicknesses when average distribution of ne, Te, Ts is assumed
     mass = []
-    for campaign in ['OP22', 'OP23', '']:
+    for campaign in campaigns:
         for configuration, LP_zeta in zip(['all', 'EIM', 'FTM', 'DBM', 'KJM'], [LP_zetas[1], LP_zetas[1], LP_zetas[2], LP_zetas[0], LP_zetas[1]]):
             for f_i_vary in [f_i]:
                 for alpha_vary in [alpha]:

@@ -377,11 +377,11 @@ def compareLangmuirProbesWithHeBeam(LPxyz: list[list[int|float]],
             LP_firstIndex.append(int(LP[1])) #first index with 'LangmuirProbe'==e.g. 'upper0' in LPdata 
     
     colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:grey', 'tab:olive', 'tab:cyan']
-    fig, ax = plt.subplots(3, 1, layout='tight', figsize=(10, 8))
+    fig, ax = plt.subplots(3, 1, layout='tight', figsize=(10, 8), sharex=True)
     
     #plot location of measurement positions for HeBeam and LPs
     ax[0].plot(HeBeam['rvec'], HeBeam['zvec'], 'x', label='HeBeam')
-    ax[0].plot(LP_r, LP_z, 'o', label='LP')
+    ax[0].plot(LP_r, LP_z, 'o', label='LS')
 
     for i, color in zip(HeBeam_times, colors[:len(HeBeam_times)]):
         ax[1].plot(HeBeam['rvec'], HeBeam['ne'][i], 'x', color=color, label='ne t={t:.2f} s'.format(t=HeBeam['t'][0][i]))
@@ -392,12 +392,12 @@ def compareLangmuirProbesWithHeBeam(LPxyz: list[list[int|float]],
         ax[2].plot(np.array(LP_r)[LP_r_index], np.array(LPdata['Te'])[np.array(LP_firstIndex) + i], 'o', color=color)#, label='Te LP t={t} s'.format(t=np.array(LPdata['time'])[LP_firstIndex[0] + i]))
     
     for i in range(3):
-        ax[i].set_xlabel('Radial component r in m')
+        ax[i].set_xlabel('Radiale Komponente r in (m)')
         ax[i].legend()
     
-    ax[0].set_ylabel('Vertical component z in m')
-    ax[1].set_ylabel('Electron density $n_e$ in 1e+18 m$^-3$')
-    ax[2].set_ylabel('Electron Temperature $T_e$ in eV')
+    ax[0].set_ylabel('Vertikale Komponente z in (m)')
+    ax[1].set_ylabel('Elektronendichte $n_e$ in (1e+18 m$^-3$)')
+    ax[2].set_ylabel('Elektronentemperatur $T_e$ in (eV)')
     fig.savefig(safe + shot + '.png', bbox_inches='tight')
     plt.show()
     plt.close()

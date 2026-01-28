@@ -1301,10 +1301,10 @@ def calculateTotalErodedLayerThicknessFromOverviewFile(m_i: list[int|float], f_i
         erosion_rateStd = np.array(erosionStd)/np.array(duration)
         deposition_rateStd = np.array(depositionStd)/np.array(duration)
 
-        #erosionStd = np.array(erosionStd) * 0
-        #erosion_rateStd = np.array(erosionStd) * 0
-        #depositionStd = np.array(erosionStd) * 0
-        #deposition_rateStd = np.array(erosionStd) * 0
+        erosionStd = np.array(erosionStd) * 0
+        erosion_rateStd = np.array(erosionStd) * 0
+        depositionStd = np.array(erosionStd) * 0
+        deposition_rateStd = np.array(erosionStd) * 0
 
         plot.plotTotalErodedLayerThickness(LPposition, erosion, deposition, erosionStd, depositionStd, '', config_short, campaign, T_default, extrapolated, safe='results{campaign}_{conc}/erosionFullCampaign/{campaign}_{Ts}_totalErosion{rates}_{config}{iota}{extrapolated}.png'.format(campaign=campaign, conc=conc, Ts=T_default, rates='Layers', iota='', config=config_short, extrapolated=extrapolated))
         plot.plotTotalErodedLayerThickness(LPposition, erosion_rate, deposition_rate, erosion_rateStd, deposition_rateStd, '', config_short, campaign, T_default, True, True, safe='results{campaign}_{conc}/erosionFullCampaign/{campaign}_{Ts}_totalErosion{rates}_{config}{iota}{extrapolated}.png'.format(campaign=campaign, conc=conc, Ts=T_default, rates='Rates', iota='', config=config_short, extrapolated=extrapolated))
@@ -1383,7 +1383,7 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
     dischargeOverview = pd.read_csv(dischargeList + campaign + '_{config}.csv'.format(config=config), sep=';')
     averageConfiguration = np.array([0.]*36)
     averageConfigurationStd = np.array([[0.]]*36)
-    averageConfigurationStdData = np.array([[0.]]*36)
+    averageConfigurationStdData = np.array([0.]*36)
     timeConfiguration = np.array([0.]*36)
     x = np.nansum(np.array(dischargeOverview['duration']))
     timeConfigurationTotal = np.array([x]*36)
@@ -1460,7 +1460,7 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
                     for counter2, dt in enumerate(timesteps):
                         indexCounter = counter * len(timesteps) + counter2
                         if list(overviewTable[quantity])[indexCounter] != 0 and not np.isnan(list(overviewTable[quantity])[indexCounter]):
-                            if quantity == 'Te':
+                            if quantity == 'Ts':
                                 if list(overviewTable[quantity])[indexCounter] != 320:
                                     averageDischarge += list(overviewTable[quantity])[indexCounter] * dt
                                     averageDischargeStdData += 0
@@ -1473,7 +1473,7 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
                                     continue
                             else:
                                 averageDischarge += list(overviewTable[quantity])[indexCounter] * dt
-                                averageDischargeStdData += list(overviewTable['s'+quantity])[indexCounter] * dt
+                                averageDischargeStdData += (list(overviewTable['s'+quantity])[indexCounter]/list(overviewTable[quantity])[indexCounter]) * dt
                                 duration_measurement += dt
                                 if np.isnan(dt):
                                     dt = 0 
@@ -1510,7 +1510,9 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
         averageConfigurationStd = help.copy()
         timeConfiguration = np.hstack(np.nansum(np.dstack((np.array(timeConfiguration), np.array(timeDischarge))), 2))
     averageConfiguration = averageConfiguration/timeConfiguration
-    averageConfigurationStdData = averageConfigurationStdData/timeConfiguration
+    averageConfigurationStdData = (averageConfigurationStdData/timeConfiguration) * np.array(averageConfiguration)
+    averageConfigurationStdDataReturn = (averageConfigurationStdData/timeConfiguration)
+
 #1    averageConfigurationStd = np.sqrt(averageConfigurationStd)/timeConfiguration
 #1    averageConfigurationStd = np.std(np.array(averageConfigurationStd))/timeConfiguration
     help = []
@@ -1523,12 +1525,12 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
 
     fig, ax = plt.subplots(2, 1, layout='constrained', figsize=(7, 10), sharex=True)
 
-    ax[0].errorbar(LP_position[:14], averageConfiguration[:14], yerr=averageConfigurationStd[:14], fmt='b-', capsize=4, label='lower divertor unit')
-    ax[0].errorbar(LP_position[:14], averageConfiguration[18:32], yerr=averageConfigurationStd[18:32], fmt='m-', capsize=4, label='upper divertor unit')
+    ax[0].errorbar(LP_position[:14], averageConfiguration[:14], yerr=averageConfigurationStdData[:14], fmt='b.-', capsize=4, label='lower divertor unit')
+    ax[0].errorbar(LP_position[:14], averageConfiguration[18:32], yerr=averageConfigurationStdData[18:32], fmt='m.-', capsize=4, label='upper divertor unit')
     ax[0].legend()
     ax[0].set_ylabel('Low iota: average ' + quantity)
-    ax[1].errorbar(LP_position[14:], averageConfiguration[14:18], yerr=averageConfigurationStd[14:18], fmt='b-', capsize=4, label='lower divertor unit')
-    ax[1].errorbar(LP_position[14:], averageConfiguration[32:], yerr=averageConfigurationStd[32:], fmt='m-', capsize=4, label='upper divertor unit')
+    ax[1].errorbar(LP_position[14:], averageConfiguration[14:18], yerr=averageConfigurationStdData[14:18], fmt='b.-', capsize=4, label='lower divertor unit')
+    ax[1].errorbar(LP_position[14:], averageConfiguration[32:], yerr=averageConfigurationStdData[32:], fmt='m.-', capsize=4, label='upper divertor unit')
     ax[1].legend()
     ax[1].set_xlabel('distance from pumping gap (m)')
     ax[1].set_ylabel('High iota: average ' + quantity)
@@ -1540,7 +1542,7 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
         if timeConfig == 0:
             timeConfigurationTotal[i] = 0
 
-    return averageConfiguration, timeConfiguration, timeConfigurationTotal, averageConfigurationStd, averageConfigurationStdData
+    return averageConfiguration, timeConfiguration, timeConfigurationTotal, averageConfigurationStd, averageConfigurationStdDataReturn
 ##################################################################################################################################################################
 
 def frameCalculateAverageQuantityPerConfiguration(quantities: list[str], 
@@ -1578,12 +1580,16 @@ def frameCalculateAverageQuantityPerConfiguration(quantities: list[str],
         
     for quantity in quantities:
         if quantity == 'ne':
+            quantityLabel = '$n_e$'
             quantityUnit = 'm$^{-3}$'
         elif quantity == 'Te':
+            quantityLabel = '$T_e$'
             quantityUnit = 'eV'
         elif quantity == 'Ts':
+            quantityLabel = '$T_s$'
             quantityUnit = 'K'
         else:
+            quantityLabel = '?'
             quantityUnit = ''
 
         for campaign in campaigns:
@@ -1615,31 +1621,40 @@ def frameCalculateAverageQuantityPerConfiguration(quantities: list[str],
                     #averageCampaign = np.hstack(np.nansum(np.dstack((np.array(averageCampaign), ((np.array(resultAverage[1])*np.array(resultAverage[0]))) )), 2))
         
             averageCampaign = averageCampaign/timeCampaign
-            averageCampaignStd = np.sqrt(averageCampaignStd)/timeCampaign
+            averageCampaignStdReturn = (np.sqrt(averageCampaignStd)/timeCampaign) * averageCampaign
+            averageCampaignStd = np.zeros_like(averageCampaignStdReturn)
 
             fig, ax = plt.subplots(2, 2, layout='constrained', figsize=(12, 10), sharex='col', sharey=True)
 
-            ax[0][1].errorbar(LP_position[14:], averageCampaign[14:18], yerr=averageCampaignStd[14:18], fmt='k-', capsize=4, label='lower divertor unit')
-            ax[1][1].errorbar(LP_position[14:], averageCampaign[32:], yerr=averageCampaignStd[32:], fmt='k-', capsize=4, label='upper divertor unit')
-            ax[0][0].errorbar(LP_position[:14], averageCampaign[:14], yerr=averageCampaignStd[:14], fmt='k-', capsize=4, label='lower divertor unit')
-            ax[1][0].errorbar(LP_position[:14], averageCampaign[18:32], yerr=averageCampaignStd[18:32], fmt='k-', capsize=4, label='upper divertor unit')
+            ax[1][1].errorbar(LP_position[14:], averageCampaign[14:18], yerr=averageCampaignStd[14:18], fmt='k.-', capsize=4, label='high-iota, untere DU')
+            ax[0][1].errorbar(LP_position[14:], averageCampaign[32:], yerr=averageCampaignStd[32:], fmt='k.-', capsize=4, label='high-iota, obere DU')
+            ax[1][0].errorbar(LP_position[:14], averageCampaign[:14], yerr=averageCampaignStd[:14], fmt='k.-', capsize=4, label='low-iota, untere DU')
+            ax[0][0].errorbar(LP_position[:14], averageCampaign[18:32], yerr=averageCampaignStd[18:32], fmt='k.-', capsize=4, label='low-iota, obere DU')
+            ylim = ax[0][0].get_ylim()
+            if ylim[0] < 0:
+                ylim = 0
             for i in range(2):
                 for j in range(2):
                     ax[i][j].legend()
-                    ax[i][j].set_ylim(bottom=0)
+                    ax[i][j].set_ylim(bottom=ylim)
+                    ax[i][j].set_xlim(left=0)
 
-            ax[1][1].set_xlabel('distance from pumping gap (m)')
-            ax[1][0].set_xlabel('distance from pumping gap (m)')
-            ax[0][0].set_ylabel(f'Low iota: average {quantity} lower divertor unit in ({quantityUnit})')
-            ax[0][1].set_ylabel(f'Low iota: average {quantity} upper divertor unit in ({quantityUnit})')
-            ax[0][1].set_ylabel(f'High iota: average {quantity} lower divertor unit in ({quantityUnit})')
-            ax[1][1].set_ylabel(f'High iota: average {quantity} upper divertor unit in ({quantityUnit})')
+
+            #ax[1][1].set_xlabel('distance from pumping gap (m)')
+            ax[1][1].set_xlabel('Abstand vom Pumpspalt in (m)')
+            #ax[1][0].set_xlabel('distance from pumping gap (m)')
+            ax[1][0].set_xlabel('Abstand vom Pumpspalt in (m)')
+            ax[0][0].set_ylabel(f'{quantityLabel} in ({quantityUnit})')
+            ax[1][0].set_ylabel(f'{quantityLabel} in ({quantityUnit})')
+            #ax[1][0].set_ylabel(f'Low iota: average {quantity} upper divertor unit in ({quantityUnit})')
+            #ax[0][1].set_ylabel(f'High iota: average {quantity} lower divertor unit in ({quantityUnit})')
+            #ax[1][1].set_ylabel(f'High iota: average {quantity} upper divertor unit in ({quantityUnit})')
             fig.savefig('results/averageQuantities/{quantity}/{quantity}{campaign}{configChosen}AverageAllPositionsHighIota.png'.format(quantity=quantity, campaign=campaign, configChosen=configChosen), bbox_inches='tight')
             plt.show()
             plt.close()
 
             averageReturn.append(averageCampaign)
-            averageReturnStd.append(averageCampaignStd)
+            averageReturnStd.append(averageCampaignStdReturn)
 
     return averageReturn, averageReturnStd
 
@@ -1741,7 +1756,7 @@ def getErrorBarsForDeposition(m_i: list[int|float], f_i: list[int|float], zeta:l
 def getErrorBarsForY(m_i: list[int|float], f_i: list[int|float], zeta:list[int|float], 
                      campaign: str, config_short: str, 
                      filename_avParams: str ='results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv',
-                     E: int|float =100) -> list[list[int:float]]:
+                     E: int|float =130) -> list[list[int:float]]:
     if not os.path.isfile(filename_avParams):
         return 'average parameter value file is missing'
     
