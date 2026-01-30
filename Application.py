@@ -49,7 +49,7 @@ qNBI = 'tags.value:"NBI source 7" OR tags.value:"NBI source 8" AND'
 #######################################################################################################################################################################
 #VARIABLE INPUT PARAMETERS
 #ion concentrations (no unit) for [H, D, T, C, O]
-f_iList = [[0.91, 0.0, 0.0, 0.03, 0.01], [0.93, 0.0, 0.0, 0.02, 0.01], [0.95, 0.0, 0.0, 0.01, 0.01]]#[0.868, 0, 0, 0.03, 0.0196]]#[[0.85, 0.0, 0.0, 0.06, 0.01], [0.87, 0.0, 0.0, 0.05, 0.01], [0.89, 0.0, 0.0, 0.04, 0.01], [0.91, 0.0, 0.0, 0.03, 0.01], [0.93, 0.0, 0.0, 0.02, 0.01], [0.95, 0.0, 0.0, 0.01, 0.01]]#[[0.933, 0, 0, 0.0335, 0.0], [0.9364, 0, 0, 0.03, 0.0012], [0.9411, 0, 0, 0.025, 0.003], [0.9457, 0, 0, 0.02, 0.0047], [0.9504, 0, 0, 0.015, 0.0065]]# [0.89, 0, 0, 0.04, 0.01]]
+f_iList = [[0.91, 0.0, 0.0, 0.03, 0.01], [0.95, 0.0, 0.0, 0.01, 0.01]]#[0.868, 0, 0, 0.03, 0.0196]]#[[0.85, 0.0, 0.0, 0.06, 0.01], [0.87, 0.0, 0.0, 0.05, 0.01], [0.89, 0.0, 0.0, 0.04, 0.01], [0.91, 0.0, 0.0, 0.03, 0.01], [0.93, 0.0, 0.0, 0.02, 0.01], [0.95, 0.0, 0.0, 0.01, 0.01]]#[[0.933, 0, 0, 0.0335, 0.0], [0.9364, 0, 0, 0.03, 0.0012], [0.9411, 0, 0, 0.025, 0.003], [0.9457, 0, 0, 0.02, 0.0047], [0.9504, 0, 0, 0.015, 0.0065]]# [0.89, 0, 0, 0.04, 0.01]]
 #f_iList = [[0.85, 0.0, 0.0, 0.06, 0.01]]
 #target density of CFC-HHF divertor in [1/m^3]
 n_target = 9.526 * 1e28 #for rho=1.9 g/cm^3 (rho*1e6*N_A/M_C) N_A is avogadro number, M_C molecular mass of carbon
@@ -62,7 +62,7 @@ defaultValues = [np.nan, np.nan, 320, np.nan, np.nan]
 if np.isnan(defaultValues[2]):
     T_default = 'NAN'    #additional information about treatment of missing T_s values for "safe" of various files 
 else:
-    T_default = str(defaultValues[-1]) + 'K'
+    T_default = str(defaultValues[2]) + 'K'
 
 #list of all released configurations (date: 01. Dec. 2025) from W7X-info
 configurations = pd.read_csv('inputFiles/Overview2.csv')['configuration']
@@ -111,7 +111,7 @@ reReadData = False
 intrapolated = False
 
 #are ne, Te, Ts averages are already calculated for all campaigns?
-avCalculated = False
+avCalculated = True
 
 #should ne, Te, Ts, Y, Delta_ero, Delta_dep,... be plotted for original and extrapolated data?
 #-> results/plots/*png
@@ -162,9 +162,9 @@ for shot in HeBeamReferenceShots:
 f_i = f_iList[0]
 neList = np.linspace(1e+18, 1e+20, 20)
 TeList = np.linspace(10, 20, 20)
-TsList = np.linspace(30+273.15, 700+273.15, 20)
+TsList = np.linspace(273.15, 700+273.15, 20)
 alphaList = np.linspace(15 * np.pi/180, 70 * np.pi/180, 20)
-zetaList = np.linspace(1 * np.pi/180, 4 * np.pi/180, 20)
+zetaList = np.linspace(0.01 * np.pi/180, 5 * np.pi/180, 20)
 timestep = np.array([50000]) #duration of the erosion period (e.g. plasma time in campaign OP2.2 and OP2.3)
 plot.parameterStudy(neList, TeList, TsList, alphaList, zetaList, m_i, f_i, ions, k, n_target)
 
@@ -173,7 +173,7 @@ plot.parameterStudy(neList, TeList, TsList, alphaList, zetaList, m_i, f_i, ions,
 extensions.readHexosForReferenceDischargesAveraged()
 
 plot.plotEnergyDistribution(15, ['H', 'C', 'O'])
-'''
+
 #print(process.calculateTotalErodedLayerThicknessFromOverviewFile(m_i, f_iList, alpha, LP_zetas[1], n_target, 'OP23', 'all', True, LP_position))
 #'''
 #######################################################################################################################################################################
@@ -378,8 +378,8 @@ if __name__ == '__main__':
                 for i, quantity in enumerate(quantities):
                     averageFrame[campaignTXT + config_short + quantity] = averages[0][i]
                     averageFrame[campaignTXT + config_short + quantity + 'Std'] = averages[1][i]
-            
-            averageFrame.to_csv('results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv', sep=';')
+            if not avCalculated:
+                averageFrame.to_csv('results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv', sep=';')
 
             #sums up all layer thicknesses of all configurations
             for configLayerThickness, zeta in zip(['all', 'EIM', 'FTM', 'DBM', 'KJM'], [LP_zetas[1], LP_zetas[1], LP_zetas[2], LP_zetas[0], LP_zetas[1]]):
@@ -388,8 +388,8 @@ if __name__ == '__main__':
             #when both campaigns are treated together first, all result/calculationTableNew files are already intrapolated with the corrected parameters and it must not be done again for OP2.2 and OP2.3    
             if campaigns[0] == '':
                 intrapolated = True
-
-        averageFrame.to_csv('results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv', sep=';')
+        if not avCalculated:
+            averageFrame.to_csv('results/averageQuantities/averageParametersPerCampaignPerConfiguration.csv', sep=';')
 
         #print(erodedMass[0])
         massFile = open('results/masses.txt', 'a')
@@ -405,9 +405,10 @@ if __name__ == '__main__':
         shutil.copytree('results/erosionExtrapolatedConfig', f'results{OP}_{conc}/erosionExtrapolatedConfig')
         shutil.copytree('results/erosionFullCampaign', f'results{OP}_{conc}/erosionFullCampaign')
 
-        if f_i == f_iList[0]:
-            avCalculated = True
+        #if f_i == f_iList[0]:
+        #    avCalculated = True
 
+    f_iList = [[0.91, 0.0, 0.0, 0.03, 0.01], [0.93, 0.0, 0.0, 0.02, 0.01], [0.95, 0.0, 0.0, 0.01, 0.01]]
     print(process.calculateTotalErodedLayerThicknessFromOverviewFile(m_i, f_iList, alpha, LP_zetas[1], n_target, 'OP22', 'all', True, LP_position))
     print(process.calculateTotalErodedLayerThicknessFromOverviewFile(m_i, f_iList, alpha, LP_zetas[1], n_target, 'OP23', 'all', True, LP_position))
     

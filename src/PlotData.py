@@ -410,10 +410,11 @@ def parameterStudy(neList: list[int|float], TeList: list[int|float], TsList: lis
     for zeta in zetaList:
         Y_H, Y_C, Y_O, erosionRate, depositionRate = appendY(Y_H, Y_C, Y_O, erosionRate, depositionRate, Te, Ts, ne, timestep, alpha, zeta, m_i, f_i, ions, k, n_target)
     ax[4][0].plot(list(map(np.rad2deg, zetaList)), list(itertools.chain.from_iterable(Y_H)), label='Wasserstoff')
-    ax[4][0].plot(list(map(np.rad2deg, zetaList)), list(itertools.chain.from_iterable(Y_C)), label='Kohlenstoff')
-    ax[4][0].plot(list(map(np.rad2deg, zetaList)), list(itertools.chain.from_iterable(Y_O)), label='Sauerstoff')
-    ax[4][1].plot(list(map(np.rad2deg, zetaList)), 0 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, label='Erosion')
-    ax[4][1].plot(list(map(np.rad2deg, zetaList)), np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9, label='Deponierung')
+    #ax[4][0].plot(list(map(np.rad2deg, zetaList)), list(itertools.chain.from_iterable(Y_C)), label='Kohlenstoff')
+    #ax[4][0].plot(list(map(np.rad2deg, zetaList)), list(itertools.chain.from_iterable(Y_O)), label='Sauerstoff')
+    ax[4][1].plot(list(map(np.rad2deg, zetaList)), 0 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, 'r', label='Bruttoerosion')
+    ax[4][1].plot(list(map(np.rad2deg, zetaList)), np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9, 'b', label='Bruttodeponierung')
+    ax[4][1].plot(list(map(np.rad2deg, zetaList)), np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, 'k', label='Nettoerosion')
 
     for i in range(2):
         ax[4][i].set_xlabel('Einfallswinkel der Magnetfeldlinien $\zeta$ in (°)')
@@ -428,8 +429,10 @@ def parameterStudy(neList: list[int|float], TeList: list[int|float], TsList: lis
     ax[3][0].plot(list(map(np.rad2deg, alphaList)), list(itertools.chain.from_iterable(Y_H)), label='Wasserstoff')
     ax[3][0].plot(list(map(np.rad2deg, alphaList)), list(itertools.chain.from_iterable(Y_C)), label='Kohlenstoff')
     ax[3][0].plot(list(map(np.rad2deg, alphaList)), list(itertools.chain.from_iterable(Y_O)), label='Sauerstoff')
-    ax[3][1].plot(list(map(np.rad2deg, alphaList)), 0 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, label='Erosion')
-    ax[3][1].plot(list(map(np.rad2deg, alphaList)), np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9, label='Deponierung')
+    ax[3][1].plot(list(map(np.rad2deg, alphaList)), 0 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, 'r', label='Bruttoerosion')
+    ax[3][1].plot(list(map(np.rad2deg, alphaList)), np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9, 'b', label='Bruttodeponierung')
+    ax[3][1].plot(list(map(np.rad2deg, alphaList)), np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, 'k', label='Nettoerosion')
+
 
     for i in range(2):
         ax[3][i].set_xlabel('Ioneneinfallswinkel $\\alpha$ in (°)')
@@ -443,8 +446,10 @@ def parameterStudy(neList: list[int|float], TeList: list[int|float], TsList: lis
     ax[0][0].plot(neList, list(itertools.chain.from_iterable(Y_H)), label='Wasserstoff')
     ax[0][0].plot(neList, list(itertools.chain.from_iterable(Y_C)), label='Kohlenstoff')
     ax[0][0].plot(neList, list(itertools.chain.from_iterable(Y_O)), label='Sauerstoff')
-    ax[0][1].plot(neList, 0 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, label='Erosion')
-    ax[0][1].plot(neList, np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9, label='Deponierung')
+    ax[0][1].plot(neList, 0 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, 'r', label='Bruttoerosion')
+    ax[0][1].plot(neList, np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9, 'b', label='Bruttodeponierung')
+    ax[0][1].plot(neList, np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, 'k', label='Nettoerosion')
+    
 
     for i in range(2):
         ax[0][i].set_xlabel('Elektronendichte $n_e$ in (m$^{-3}$)')
@@ -459,8 +464,9 @@ def parameterStudy(neList: list[int|float], TeList: list[int|float], TsList: lis
     ax[1][0].plot(TeList, list(itertools.chain.from_iterable(Y_H)), label='Wasserstoff')
     ax[1][0].plot(TeList, list(itertools.chain.from_iterable(Y_C)), label='Kohlenstoff')
     ax[1][0].plot(TeList, list(itertools.chain.from_iterable(Y_O)), label='Sauerstoff')
-    ax[1][1].plot(TeList, 0 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, label='Erosion')
-    ax[1][1].plot(TeList, np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9, label='Deponierung')
+    ax[1][1].plot(TeList, 0 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, 'r', label='Bruttoerosion')
+    ax[1][1].plot(TeList, np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9, 'b', label='Bruttodeponierung')
+    ax[1][1].plot(TeList, np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, 'k', label='Nettoerosion')
 
     for i in range(2):
         ax[1][i].set_xlabel('Elektronentemperatur $T_e$ in (eV)')
@@ -475,8 +481,9 @@ def parameterStudy(neList: list[int|float], TeList: list[int|float], TsList: lis
     ax[2][0].plot(TsList, list(itertools.chain.from_iterable(Y_H)), label='Wasserstoff')
     #ax[2][0].plot(TsList, list(itertools.chain.from_iterable(Y_C)), label='Kohlenstoff')
     #ax[2][0].plot(TsList, list(itertools.chain.from_iterable(Y_O)), label='Sauerstoff')
-    ax[2][1].plot(TsList, 0 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, label='Erosion')
-    ax[2][1].plot(TsList, np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9, label='Deponierung')
+    ax[2][1].plot(TsList, 0 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, 'r', label='Bruttoerosion')
+    ax[2][1].plot(TsList, np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9, 'b', label='Bruttodeponierung')
+    ax[2][1].plot(TsList, np.array(list(itertools.chain.from_iterable(depositionRate)))*1e+9 - np.array(list(itertools.chain.from_iterable(erosionRate)))*1e+9, 'k', label='Nettoerosion')
 
     for i in range(2):
         ax[2][i].set_xlabel('Oberflächentemperatur $T_s$ in (K)')

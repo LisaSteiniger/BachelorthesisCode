@@ -1510,8 +1510,8 @@ def calculateAverageQuantityPerConfiguration(quantity: str,
         averageConfigurationStd = help.copy()
         timeConfiguration = np.hstack(np.nansum(np.dstack((np.array(timeConfiguration), np.array(timeDischarge))), 2))
     averageConfiguration = averageConfiguration/timeConfiguration
-    averageConfigurationStdData = (averageConfigurationStdData/timeConfiguration) * np.array(averageConfiguration)
     averageConfigurationStdDataReturn = (averageConfigurationStdData/timeConfiguration)
+    averageConfigurationStdData = (averageConfigurationStdData/timeConfiguration) * np.array(averageConfiguration)
 
 #1    averageConfigurationStd = np.sqrt(averageConfigurationStd)/timeConfiguration
 #1    averageConfigurationStd = np.std(np.array(averageConfigurationStd))/timeConfiguration
@@ -1637,7 +1637,7 @@ def frameCalculateAverageQuantityPerConfiguration(quantities: list[str],
                 for j in range(2):
                     ax[i][j].legend()
                     ax[i][j].set_ylim(bottom=ylim)
-                    ax[i][j].set_xlim(left=0)
+                    #ax[i][j].set_xlim(left=0)
 
 
             #ax[1][1].set_xlabel('distance from pumping gap (m)')
